@@ -54,9 +54,15 @@ compile_commands.json
 __pycache__
 
 dist
+build
+*.egg-info
 .idea
 .project
 .cproject
+
+# setup.py-generated service files (from daemon/resources/*.in)
+/**/openrazer-daemon.service
+/**/org.razer.service
 *.o.cmd
 *.ko.cmd
 /driver/.tmp_versions
