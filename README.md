@@ -298,6 +298,7 @@ This will output something similar to this:
 | Razer Cobra HyperSpeed (Wireless)                             |  1532:00DB  |
 | Razer Viper V3 Pro SE (Wired)                                 |  1532:00DE  |
 | Razer Viper V3 Pro SE (Wireless)                              |  1532:00DF  |
+| Razer Naga V3 Pro (Wired)                                     |  1532:00E7  |
 
 ### Mousemats
 | Device                                                        | USB VID:PID |
