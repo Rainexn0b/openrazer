@@ -1060,6 +1060,11 @@ class RazerNagaV3ProWired(RazerNagaV2ProWired):
         'get_scroll_brightness', 'set_scroll_brightness', 'set_scroll_wave', 'set_scroll_static', 'set_scroll_spectrum', 
         'set_scroll_none', 'set_scroll_reactive', 'set_scroll_breath_random', 'set_scroll_breath_single', 'set_scroll_breath_dual']
 
+class RazerNagaV3ProWireless(RazerNagaV3ProWired):
+    """
+    Class for the Razer Naga V3 Pro (Wireless)
+    """
+    USB_PID = 0x00E8
 
 class RazerDeathAdder1800(__RazerDevice):
     """
