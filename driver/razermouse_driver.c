@@ -6168,10 +6168,6 @@ static int razer_raw_event(struct hid_device *hdev, struct hid_report *report, u
     struct usb_interface *intf = to_usb_interface(hdev->dev.parent);
     struct razer_mouse_device *rdev = hid_get_drvdata(hdev);
 
-    if (hdev->product == USB_DEVICE_ID_RAZER_NAGA_V3_PRO_WIRED) // TODO remove debug line once new button code identified
-        hid_info(hdev, "razermouse: raw_event intf_proto=%u size=%d data=%*ph\n",
-                 intf->cur_altsetting->desc.bInterfaceProtocol, size, size, data);
-
     switch (hdev->product) {
     case USB_DEVICE_ID_RAZER_MAMBA_ELITE:
     case USB_DEVICE_ID_RAZER_NAGA_2014:
@@ -6230,6 +6226,60 @@ static int razer_raw_event(struct hid_device *hdev, struct hid_report *report, u
                     input_rep4_code(m_rdev->input, rdev->rep4[i], 0);
             }
             memcpy(rdev->rep4, data, 16);
+            return 1;
+        }
+        break;
+    case USB_DEVICE_ID_RAZER_NAGA_V3_PRO_WIRED:
+        /* Detect wheel tilt edges 
+         * tilting produces data[0] 0x00->0x20->0x00 (left) or
+         * 0x00->0x40->0x00 (right), nothing else changes. Map that straight
+         * to F15/F16
+        */
+        if (intf->cur_altsetting->desc.bInterfaceProtocol == USB_INTERFACE_PROTOCOL_MOUSE) {
+            if (edge_bit(rdev->button_byte, data[0], 1 << BIT_TILT_L)) {
+                input_report_key(rdev->input, KEY_F15, !!(data[0] & (1 << BIT_TILT_L)));
+                input_sync(rdev->input);
+            }
+            if (edge_bit(rdev->button_byte, data[0], 1 << BIT_TILT_R)) {
+                input_report_key(rdev->input, KEY_F16, !!(data[0] & (1 << BIT_TILT_R)));
+                input_sync(rdev->input);
+            }
+            rdev->button_byte = data[0];
+        }
+
+        /* Default behaviour +  Hypershift mode toggle workaround */
+        if(intf->cur_altsetting->desc.bInterfaceProtocol == USB_INTERFACE_PROTOCOL_KEYBOARD && size == 16 && data[0] == 0x04) {
+            int index = size-1;
+
+            while(--index > 0) {
+                u8 cur_value = data[index];
+                if(cur_value == 0x00) { // Skip 0x00
+                    continue;
+                }
+
+                switch(cur_value) {
+                case 0x20: // DPI Up
+                    cur_value = 0x68; // F13
+                    break;
+                case 0x21: // DPI Down
+                    cur_value = 0x69; // F14
+                    break;
+                case 0x22: // Wheel Left
+                    cur_value = 0x6A; // F15
+                    break;
+                case 0x23: // Wheel Right
+                    cur_value = 0x6B; // F16
+                    break;
+                case 0x59: // Hypershift mode toggle (workaround: don't change the "scroll mode" in this button)
+                    cur_value = 0x6C; // F17
+                    break;
+                }
+
+                data[index+1] = cur_value;
+            }
+
+            data[0] = 0x01;
+            data[1] = 0x00;
             return 1;
         }
         break;
@@ -6336,6 +6386,11 @@ static int razer_input_configured(struct hid_device *hdev,
             input_set_capability(hidinput->input, EV_REL, REL_HWHEEL_HI_RES);
             input_set_capability(hidinput->input, EV_KEY, BTN_FORWARD);
             input_set_capability(hidinput->input, EV_KEY, BTN_BACK);
+            break;
+
+        case USB_DEVICE_ID_RAZER_NAGA_V3_PRO_WIRED:
+            input_set_capability(hidinput->input, EV_KEY, KEY_F15);
+            input_set_capability(hidinput->input, EV_KEY, KEY_F16);
             break;
         }
     }
