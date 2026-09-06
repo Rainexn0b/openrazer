@@ -1493,6 +1493,36 @@ struct razer_report razer_chroma_misc_get_scroll_mode(void)
 }
 
 /**
+ * Set scroll wheel mode on the device (Naga V3 Pro variant)
+ *
+ * Status Trans Packet Proto DataSize Class CMD Args
+ * 00     1f    0000   00    02       02    30  0100    | SET SCROLL WHEEL MODE (VARSTR, TACTILE)
+ * 00     1f    0000   00    02       02    30  0101    | SET SCROLL WHEEL MODE (VARSTR, FREE-SPIN)
+ * 00     1f    0000   00    02       02    30  0102    | SET SCROLL WHEEL MODE (VARSTR, PRECISION TACTILE)
+ */
+struct razer_report razer_chroma_misc_set_scroll_mode_naga_v3_pro(unsigned int scroll_mode)
+{
+    struct razer_report report = get_razer_report(0x02, 0x30, 0x02);
+
+    report.arguments[0] = VARSTORE;
+    report.arguments[1] = scroll_mode;
+
+    return report;
+}
+
+/**
+ * Get scroll wheel mode from the device (Naga V3 Pro variant)
+ */
+struct razer_report razer_chroma_misc_get_scroll_mode_naga_v3_pro(void)
+{
+    struct razer_report report = get_razer_report(0x02, 0xB0, 0x02);
+
+    report.arguments[0] = VARSTORE;
+
+    return report;
+}
+
+/**
  * Set scroll wheel acceleration on/off on the device
  *
  * Status Trans Packet Proto DataSize Class CMD Args
@@ -1547,6 +1577,22 @@ struct razer_report razer_chroma_misc_get_scroll_smart_reel(void)
     struct razer_report report = get_razer_report(0x02, 0x97, 0x02);
 
     report.arguments[0] = VARSTORE;
+
+    return report;
+}
+
+/**
+ * Set scroll wheel "smart reel" on/off on the device (Naga V3 Pro variant)
+ *
+ * Unlike the other devices, the Naga V3 Pro expects the full 80-byte argument
+ * block even though only arguments[1] carries information.
+ */
+struct razer_report razer_chroma_misc_set_scroll_smart_reel_naga_v3_pro(bool smart_reel)
+{
+    struct razer_report report = get_razer_report(0x02, 0x17, 0x50);
+
+    report.arguments[0] = VARSTORE;
+    report.arguments[1] = smart_reel;
 
     return report;
 }
