@@ -2951,12 +2951,31 @@ static ssize_t razer_attr_write_scroll_mode(struct device *dev, struct device_at
     struct razer_report request = {0};
     struct razer_report response = {0};
     unsigned int scroll_mode;
+    unsigned int scroll_mode_max;
     int err;
 
-    if (kstrtouint(buf, 0, &scroll_mode) < 0 || scroll_mode > 1)
+    switch (device->usb_pid) {
+    case USB_DEVICE_ID_RAZER_NAGA_V3_PRO_WIRED:
+        scroll_mode_max = 2; // Tactile, free-spin, precision tactile
+        break;
+
+    default:
+        scroll_mode_max = 1; // Tactile, free-spin
+        break;
+    }
+
+    if (kstrtouint(buf, 0, &scroll_mode) < 0 || scroll_mode > scroll_mode_max)
         return -EINVAL;
 
-    request = razer_chroma_misc_set_scroll_mode(scroll_mode);
+    switch (device->usb_pid) {
+    case USB_DEVICE_ID_RAZER_NAGA_V3_PRO_WIRED:
+        request = razer_chroma_misc_set_scroll_mode_naga_v3_pro(scroll_mode);
+        break;
+
+    default:
+        request = razer_chroma_misc_set_scroll_mode(scroll_mode);
+        break;
+    }
     request.transaction_id.id = 0x1f;
 
     err = razer_send_payload(device, &request, &response);
@@ -2978,7 +2997,15 @@ static ssize_t razer_attr_read_scroll_mode(struct device *dev, struct device_att
     struct razer_report response = {0};
     int err;
 
-    request = razer_chroma_misc_get_scroll_mode();
+    switch (device->usb_pid) {
+    case USB_DEVICE_ID_RAZER_NAGA_V3_PRO_WIRED:
+        request = razer_chroma_misc_get_scroll_mode_naga_v3_pro();
+        break;
+
+    default:
+        request = razer_chroma_misc_get_scroll_mode();
+        break;
+    }
     request.transaction_id.id = 0x1f;
 
     err = razer_send_payload(device, &request, &response);
@@ -3052,7 +3079,15 @@ static ssize_t razer_attr_write_scroll_smart_reel(struct device *dev, struct dev
     if (kstrtobool(buf, &smart_reel) < 0)
         return -EINVAL;
 
-    request = razer_chroma_misc_set_scroll_smart_reel(smart_reel);
+    switch (device->usb_pid) {
+    case USB_DEVICE_ID_RAZER_NAGA_V3_PRO_WIRED:
+        request = razer_chroma_misc_set_scroll_smart_reel_naga_v3_pro(smart_reel);
+        break;
+
+    default:
+        request = razer_chroma_misc_set_scroll_smart_reel(smart_reel);
+        break;
+    }
     request.transaction_id.id = 0x1f;
 
     err = razer_send_payload(device, &request, &response);
@@ -7352,7 +7387,7 @@ static int razer_mouse_probe(struct hid_device *hdev, const struct hid_device_id
             CREATE_DEVICE_FILE(&hdev->dev, &dev_attr_matrix_effect_custom);
             CREATE_DEVICE_FILE(&hdev->dev, &dev_attr_matrix_custom_frame);
             break;
-//
+
         case USB_DEVICE_ID_RAZER_NAGA_V3_PRO_WIRED:
             CREATE_DEVICE_FILE(&hdev->dev, &dev_attr_dpi);
             CREATE_DEVICE_FILE(&hdev->dev, &dev_attr_dpi_stages);
@@ -7378,6 +7413,10 @@ static int razer_mouse_probe(struct hid_device *hdev, const struct hid_device_id
             CREATE_DEVICE_FILE(&hdev->dev, &dev_attr_scroll_matrix_effect_breath);
             CREATE_DEVICE_FILE(&hdev->dev, &dev_attr_scroll_matrix_effect_static);
             CREATE_DEVICE_FILE(&hdev->dev, &dev_attr_scroll_matrix_effect_none);
+
+            CREATE_DEVICE_FILE(&hdev->dev, &dev_attr_scroll_mode);
+            CREATE_DEVICE_FILE(&hdev->dev, &dev_attr_scroll_acceleration);
+            CREATE_DEVICE_FILE(&hdev->dev, &dev_attr_scroll_smart_reel);
 
             CREATE_DEVICE_FILE(&hdev->dev, &dev_attr_matrix_brightness);
             CREATE_DEVICE_FILE(&hdev->dev, &dev_attr_matrix_effect_spectrum);
@@ -8617,6 +8656,10 @@ static void razer_mouse_disconnect(struct hid_device *hdev)
             device_remove_file(&hdev->dev, &dev_attr_scroll_matrix_effect_breath);
             device_remove_file(&hdev->dev, &dev_attr_scroll_matrix_effect_static);
             device_remove_file(&hdev->dev, &dev_attr_scroll_matrix_effect_none);
+
+            device_remove_file(&hdev->dev, &dev_attr_scroll_mode);
+            device_remove_file(&hdev->dev, &dev_attr_scroll_acceleration);
+            device_remove_file(&hdev->dev, &dev_attr_scroll_smart_reel);
 
             device_remove_file(&hdev->dev, &dev_attr_matrix_brightness);
             device_remove_file(&hdev->dev, &dev_attr_matrix_effect_spectrum);
