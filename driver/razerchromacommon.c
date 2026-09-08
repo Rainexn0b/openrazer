@@ -1208,13 +1208,13 @@ struct razer_report razer_chroma_misc_set_dock_brightness(unsigned char brightne
 /**
  * Set the DPI of the device
  */
-struct razer_report razer_chroma_misc_set_dpi_xy(unsigned char variable_storage, unsigned short dpi_x,unsigned short dpi_y)
+struct razer_report razer_chroma_misc_set_dpi_xy(unsigned char variable_storage, unsigned short dpi_x, unsigned short dpi_y, unsigned short dpi_max)
 {
     struct razer_report report = get_razer_report(0x04, 0x05, 0x07);
 
     // Keep the DPI within bounds
-    dpi_x = clamp(dpi_x, 100, 45000);
-    dpi_y = clamp(dpi_y, 100, 45000);
+    dpi_x = clamp(dpi_x, 100, dpi_max);
+    dpi_y = clamp(dpi_y, 100, dpi_max);
 
     report.arguments[0] = VARSTORE;
 

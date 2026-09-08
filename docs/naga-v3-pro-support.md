@@ -26,7 +26,7 @@ Naga V3 Pro. Device serial numbers are intentionally omitted.
 - [x] Create the `Rainexn0b/openrazer` fork and add it as the `fork` remote.
 - [x] Integrate PR #2904 and harden its scroll-mode and raw-event handling.
 - [x] Regenerate metadata and pass the 269-device fake integration test.
-- [ ] Install the fork through local pacman/DKMS packages.
+- [x] Install the fork through local pacman/DKMS packages.
 - [ ] Test the existing support implementation on this mouse in wired and
   HyperSpeed modes.
 
@@ -274,19 +274,43 @@ separate daemon identity design change.
 
 | Area | Wired `00E7` | Wireless `00E8` | Notes |
 | --- | --- | --- | --- |
-| Device discovery and daemon restart | Pending | Pending | Verify mode switching without stale devices. |
-| Serial and firmware reads | Pending | Pending | Serial must not become `UNKWN...`. |
-| Battery and charge state | Pending | Pending | Compare with Synapse or another trusted reading. |
-| DPI read/write and stages | Pending | Pending | Test boundaries up to reported 50,000 DPI. |
-| Poll rate | Pending | Pending | Test every exposed rate. |
-| Logo RGB | Pending | Pending | Static, spectrum, wave, reactive, breath, off, brightness. |
-| Scroll-wheel RGB | Pending | Pending | Static, spectrum, wave, reactive, breath, off, brightness. |
-| Side-button RGB | Pending | Pending | Test both six-button and twelve-button plates. |
-| Scroll mode | Pending | Pending | Tactile `0`, free-spin `1`, precision tactile `2`. |
-| Scroll acceleration | Pending | Pending | Read/write and persistence. |
-| Smart Reel | Pending | Pending | Read/write and persistence. |
-| Buttons and wheel tilt | Pending | Pending | Include side plates and Hypershift behavior. |
+| Device discovery and daemon restart | Pass | Pending | Wired binds on all four HID interfaces and is rediscovered after daemon restart. |
+| Serial and firmware reads | Pass | Pending | Wired serial is stable and is not `UNKWN...`; firmware reads successfully. |
+| Battery and charge state | Partial | Pending | Wired reports 100% and charging; compare with a trusted reading in wireless mode. |
+| DPI read/write and stages | Partial | Pending | Normal writes, stage reads, and restoration pass. A shared 45,000 clamp blocks the advertised 50,000 maximum; a source fix is pending package installation. |
+| Poll rate | Pass | Pending | Writes and reads at 125, 500, and 1,000 Hz pass; the device does not expose a supported-rate list. |
+| Logo RGB | Pass | Pending | Static, spectrum, wave, reactive, breath, off, and independent brightness pass. |
+| Scroll-wheel RGB | Pass | Pending | Static, spectrum, wave, reactive, breath, off, and independent brightness pass. |
+| Side-button RGB | Partial | Pending | Global effects drive the side-button zone on the 12-button plate; the six-button plate remains untested. |
+| Scroll mode | Pass | Pending | Standard tactile `0`, free-spin `1`, and precision tactile `2` pass physically after allowing two seconds for changes. |
+| Scroll acceleration | Pass | Pending | Read/write passes and the setting was restored disabled. |
+| Smart Reel | Pass | Pending | Read/write passes and the setting was restored disabled. |
+| Buttons and wheel tilt | Pass | Pending | See the wired input mapping below. |
 | Suspend/resume and reconnect | Pending | Pending | Include switching wired/wireless modes. |
+
+The wired 12-button input mapping was captured from all three event interfaces:
+
+| Control | Linux input event |
+| --- | --- |
+| DPI Up | `KEY_F13` |
+| DPI Down | `KEY_F14` |
+| Wheel tilt left | `KEY_F15` |
+| Wheel tilt right | `KEY_F16` |
+| Hypershift | `KEY_F17` |
+| Side buttons 1 through 10 | `KEY_1` through `KEY_0` |
+| Side button 11 | `KEY_MINUS` |
+| Side button 12 | `KEY_EQUAL` |
+
+Wheel tilt emits only the expected F-key event; no duplicate `REL_HWHEEL`
+event was observed. No related kernel or daemon errors appeared during the
+capture.
+
+Two boundary tests need follow-up. The product advertises 50,000 DPI and the
+daemon accepts it, but the shared driver report builder clamps writes to
+45,000. A device-aware source fix preserves the existing 45,000 cap for other
+mice while allowing 50,000 for the Naga V3 Pro. Also, OpenRazer's low-battery
+setter supports thresholds only through 25%. Testing a 31% write therefore
+quantized the previous 30% setting to 25%; 25% is now the active threshold.
 
 For each failure, retain relevant `dmesg` output and note the connection mode,
 firmware, side plate, command, expected behavior, and observed behavior. USB

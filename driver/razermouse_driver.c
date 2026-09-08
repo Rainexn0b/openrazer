@@ -2454,6 +2454,7 @@ static ssize_t razer_attr_write_dpi(struct device *dev, struct device_attribute 
     unsigned char dpi_x_byte;
     unsigned char dpi_y_byte;
     unsigned char varstore;
+    unsigned short dpi_max = 45000;
     int err;
 
     // So far I think imperator uses varstore
@@ -2537,6 +2538,10 @@ static ssize_t razer_attr_write_dpi(struct device *dev, struct device_attribute 
         break;
     }
 
+    if (device->usb_pid == USB_DEVICE_ID_RAZER_NAGA_V3_PRO_WIRED ||
+        device->usb_pid == USB_DEVICE_ID_RAZER_NAGA_V3_PRO_WIRELESS)
+        dpi_max = 50000;
+
     if (count != 2 && count != 4) {
         dev_warn(dev, "razermouse: DPI requires 2 bytes or 4 bytes\n");
         return -EINVAL;
@@ -2544,13 +2549,13 @@ static ssize_t razer_attr_write_dpi(struct device *dev, struct device_attribute 
 
     if (count == 2) {
         dpi_x = (buf[0] << 8) | (buf[1] & 0xFF); // TODO make convenience function
-        request = razer_chroma_misc_set_dpi_xy(varstore, dpi_x, dpi_x);
+        request = razer_chroma_misc_set_dpi_xy(varstore, dpi_x, dpi_x, dpi_max);
 
     } else if(count == 4) {
         dpi_x = (buf[0] << 8) | (buf[1] & 0xFF); // Apparently the char buffer is rubbish, as buf[1] somehow can equal FFFFFF80????
         dpi_y = (buf[2] << 8) | (buf[3] & 0xFF);
 
-        request = razer_chroma_misc_set_dpi_xy(varstore, dpi_x, dpi_y);
+        request = razer_chroma_misc_set_dpi_xy(varstore, dpi_x, dpi_y, dpi_max);
     }
 
     switch(device->usb_pid) { // New devices set the device ID properly
