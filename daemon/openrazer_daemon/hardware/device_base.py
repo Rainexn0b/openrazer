@@ -1125,7 +1125,7 @@ class RazerDevice(DBusService):
         })
 
     def get_device_image(self):
-        return self.DEVICE_IMAGE
+        return self.DEVICE_IMAGE or ''
 
     def load_methods(self):
         """

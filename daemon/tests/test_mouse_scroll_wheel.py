@@ -6,6 +6,7 @@ import unittest
 import unittest.mock
 
 from openrazer_daemon.dbus_services.dbus_methods.mouse_scroll_wheel import set_scroll_mode
+from openrazer_daemon.hardware.device_base import RazerDevice
 
 
 class DummyDevice(object):
@@ -54,3 +55,8 @@ class MouseScrollWheelTest(unittest.TestCase):
         for mode in (-1, 3):
             with self.assertRaisesRegex(ValueError, "between 0 and 2"):
                 set_scroll_mode(self.device, mode)
+
+    def test_missing_device_image_is_empty_string(self):
+        self.device.DEVICE_IMAGE = None
+
+        self.assertEqual(RazerDevice.get_device_image(self.device), '')
