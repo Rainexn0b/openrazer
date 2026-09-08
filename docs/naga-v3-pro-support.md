@@ -174,9 +174,9 @@ packages while satisfying the local split-package dependencies:
 
 ```sh
 sudo pacman -U \
-  ./openrazer-driver-dkms-local-3.12.4.nagav3.1-1-any.pkg.tar.zst \
-  ./openrazer-daemon-local-3.12.4.nagav3.1-1-any.pkg.tar.zst \
-  ./python-openrazer-local-3.12.4.nagav3.1-1-any.pkg.tar.zst
+  ./openrazer-driver-dkms-local-3.12.4.nagav3.1-2-any.pkg.tar.zst \
+  ./openrazer-daemon-local-3.12.4.nagav3.1-2-any.pkg.tar.zst \
+  ./python-openrazer-local-3.12.4.nagav3.1-2-any.pkg.tar.zst
 ```
 
 Reboot after the DKMS transaction so no released module remains loaded. Leave

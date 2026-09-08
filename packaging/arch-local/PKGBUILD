@@ -7,7 +7,7 @@ pkgname=(
   python-openrazer-local
 )
 pkgver=3.12.4.nagav3.1
-pkgrel=1
+pkgrel=2
 pkgdesc='OpenRazer with local Razer Naga V3 Pro support'
 arch=(any)
 url=https://github.com/Rainexn0b/openrazer
@@ -61,6 +61,8 @@ package_openrazer-driver-dkms-local() {
   cd openrazer
   make DESTDIR="$pkgdir" DKMS_NAME=openrazer-driver DKMS_VER="$pkgver" setup_dkms udev_install
   sed -i "s/^PACKAGE_VERSION=.*/PACKAGE_VERSION=\"$pkgver\"/" \
+    "$pkgdir/usr/src/openrazer-driver-$pkgver/dkms.conf"
+  sed -i 's|^MAKE=.*|MAKE="KERNELDIR=/lib/modules/${kernelver}/build LLVM=1 make driver"|' \
     "$pkgdir/usr/src/openrazer-driver-$pkgver/dkms.conf"
   install -Dm644 ../sysusers.conf "$pkgdir/usr/lib/sysusers.d/openrazer.conf"
 }
