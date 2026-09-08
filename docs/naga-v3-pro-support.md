@@ -290,6 +290,7 @@ separate daemon identity design change.
 | Scroll acceleration | Pass | Pass | Read/write and physical behavior pass; the setting was restored disabled. |
 | Smart Reel | Pass | Pass | Read/write and physical behavior pass; the setting was restored disabled. |
 | Buttons and wheel tilt | Pass | Pass | Both transports produce the mapping below with no duplicate wheel-tilt events. |
+| Desktop applications | Pass | Not tested | Polychromatic exposes working device controls, and Input Remapper detects and remaps the special inputs. |
 | Suspend/resume and reconnect | Pass | Partial | Suspend/resume passes on both transports. Receiver reconnect needs the mouse awake or a daemon restart; see below. |
 
 The wired and wireless 12-button input mappings were captured from all three
@@ -314,6 +315,12 @@ The alternate side plates were also tested over HyperSpeed. The 6-button plate
 emits `KEY_1` through `KEY_6` in physical order. The front and rear controls on
 the 2-button plate emit `BTN_EXTRA` and `BTN_SIDE`, respectively. All events
 include clean press and release transitions.
+
+Desktop integration was verified in wired mode. Polychromatic detects the Naga
+and provides working lighting, brightness, polling, sleep, low-battery, scroll,
+and DPI controls, including a 50,000 DPI stage. Input Remapper detects the
+Naga's input interfaces, records the special F-key events such as `KEY_F17`,
+and applies remappings successfully.
 
 The initial 50,000 DPI boundary test exposed a shared driver clamp at 45,000.
 The device-aware fix in `pkgrel=5` preserves the existing 45,000 cap for other
