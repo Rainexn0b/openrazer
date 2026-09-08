@@ -1,0 +1,5 @@
+/openrazer/
+/pkg/
+/src/
+/*.log
+/*.pkg.tar.*

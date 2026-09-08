@@ -158,6 +158,46 @@ The workstation already has packaged `openrazer-daemon` and
 modules during hardware tests; replace them with tracked local packages and
 use pacman to roll back.
 
+## Local Arch Packages
+
+The split package recipe in `packaging/arch-local` is pinned to tested fork
+commit `db51ddbc7fa3697f7f111e4a95bdb74fa576a42f`. Build all three packages as an
+unprivileged user:
+
+```sh
+cd packaging/arch-local
+makepkg --cleanbuild --clean
+```
+
+Install them together so pacman can replace the official daemon and DKMS
+packages while satisfying the local split-package dependencies:
+
+```sh
+sudo pacman -U \
+  ./openrazer-driver-dkms-local-3.12.4.nagav3.1-1-any.pkg.tar.zst \
+  ./openrazer-daemon-local-3.12.4.nagav3.1-1-any.pkg.tar.zst \
+  ./python-openrazer-local-3.12.4.nagav3.1-1-any.pkg.tar.zst
+```
+
+Reboot after the DKMS transaction so no released module remains loaded. Leave
+the receiver disconnected for the first wired test. Verify the installation
+with:
+
+```sh
+pacman -Q openrazer-daemon-local openrazer-driver-dkms-local \
+  python-openrazer-local
+dkms status
+systemctl --user status openrazer-daemon.service
+```
+
+To roll back, remove the optional local Python client first, replace the local
+daemon and driver with repository packages, and reboot:
+
+```sh
+sudo pacman -R python-openrazer-local
+sudo pacman -S openrazer-daemon openrazer-driver-dkms
+```
+
 ## Device Discovery
 
 The project calls the device **Razer Naga V3 Pro**, although it may be

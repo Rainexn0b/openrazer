@@ -1,0 +1,79 @@
+# Maintainer: Cyril Pascoe <Cyril.pascoe@gmail.com>
+
+pkgbase=openrazer-naga-v3-local
+pkgname=(
+  openrazer-daemon-local
+  openrazer-driver-dkms-local
+  python-openrazer-local
+)
+pkgver=3.12.4.nagav3.1
+pkgrel=1
+pkgdesc='OpenRazer with local Razer Naga V3 Pro support'
+arch=(any)
+url=https://github.com/Rainexn0b/openrazer
+license=(GPL)
+makedepends=(
+  git
+  python-setuptools
+)
+source=(
+  'openrazer::git+https://github.com/Rainexn0b/openrazer.git#commit=db51ddbc7fa3697f7f111e4a95bdb74fa576a42f'
+  sysusers.conf
+)
+b2sums=(
+  'SKIP'
+  '4315fa4a7c79eb678c1d357b3326fcfec438b83e12741c86605dc4440414950b3b0e267b83056500f70b09a08a41004f46f40182d04fcd3ba8c55f724f1b436d'
+)
+
+prepare() {
+  cd openrazer
+  sed -i 's/plugdev/openrazer/g' \
+    daemon/openrazer_daemon/daemon.py \
+    install_files/udev/99-razer.rules \
+    install_files/udev/razer_mount
+}
+
+package_openrazer-daemon-local() {
+  pkgdesc='Userspace daemon with local Razer Naga V3 Pro support'
+  depends=(
+    dbus-python
+    openrazer-driver-dkms-local
+    python-daemonize
+    python-gobject
+    python-pyudev
+    python-setproctitle
+    xautomation
+  )
+  optdepends=('libnotify: for the battery notifier')
+  provides=("openrazer-daemon=$pkgver")
+  conflicts=(openrazer-daemon)
+
+  cd openrazer
+  make DESTDIR="$pkgdir" daemon_install
+}
+
+package_openrazer-driver-dkms-local() {
+  pkgdesc='OpenRazer DKMS modules with local Razer Naga V3 Pro support'
+  depends=(dkms)
+  provides=("openrazer-driver-dkms=$pkgver")
+  conflicts=(openrazer-driver-dkms)
+
+  cd openrazer
+  make DESTDIR="$pkgdir" DKMS_NAME=openrazer-driver DKMS_VER="$pkgver" setup_dkms udev_install
+  sed -i "s/^PACKAGE_VERSION=.*/PACKAGE_VERSION=\"$pkgver\"/" \
+    "$pkgdir/usr/src/openrazer-driver-$pkgver/dkms.conf"
+  install -Dm644 ../sysusers.conf "$pkgdir/usr/lib/sysusers.d/openrazer.conf"
+}
+
+package_python-openrazer-local() {
+  pkgdesc='Python library for interacting with the locally patched OpenRazer daemon'
+  depends=(
+    openrazer-daemon-local
+    python-numpy
+  )
+  provides=("python-openrazer=$pkgver")
+  conflicts=(python-openrazer)
+
+  cd openrazer
+  make DESTDIR="$pkgdir" python_library_install
+}
