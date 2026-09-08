@@ -161,7 +161,7 @@ use pacman to roll back.
 ## Local Arch Packages
 
 The split package recipe in `packaging/arch-local` is pinned to tested fork
-commit `2ee8b759b19ebb8464a4ebf497bdc84a18a04f5c`. Build all three packages as an
+commit `214184a64a11fcb718d5f8356addf45b279141d0`. Build all three packages as an
 unprivileged user:
 
 ```sh
@@ -174,9 +174,9 @@ packages while satisfying the local split-package dependencies:
 
 ```sh
 sudo pacman -U \
-  ./openrazer-driver-dkms-local-3.12.4.nagav3.1-4-any.pkg.tar.zst \
-  ./openrazer-daemon-local-3.12.4.nagav3.1-4-any.pkg.tar.zst \
-  ./python-openrazer-local-3.12.4.nagav3.1-4-any.pkg.tar.zst
+  ./openrazer-driver-dkms-local-3.12.4.nagav3.1-5-any.pkg.tar.zst \
+  ./openrazer-daemon-local-3.12.4.nagav3.1-5-any.pkg.tar.zst \
+  ./python-openrazer-local-3.12.4.nagav3.1-5-any.pkg.tar.zst
 ```
 
 Reboot after the DKMS transaction so no released module remains loaded. Leave
