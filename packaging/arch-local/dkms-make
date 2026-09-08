@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+
+kerneldir="/lib/modules/$1/build"
+
+if grep -q '^CONFIG_CC_IS_CLANG=y' "$kerneldir/.config"; then
+  exec make KERNELDIR="$kerneldir" LLVM=1 driver
+fi
+
+exec make KERNELDIR="$kerneldir" driver
