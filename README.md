@@ -261,8 +261,6 @@ This will output something similar to this:
 | Razer Viper V2 Pro (Wireless)                                 |  1532:00A6  |
 | Razer Naga V2 Pro (Wired)                                     |  1532:00A7  |
 | Razer Naga V2 Pro (Wireless)                                  |  1532:00A8  |
-| Razer Naga V3 Pro (Wired)                                     |  1532:00E7  |
-| Razer Naga V3 Pro (Wireless)                                  |  1532:00E8  |
 | Razer Basilisk V3 Pro (Wired)                                 |  1532:00AA  |
 | Razer Basilisk V3 Pro (Wireless)                              |  1532:00AB  |
 | Razer Cobra Pro (Wired)                                       |  1532:00AF  |
@@ -293,6 +291,8 @@ This will output something similar to this:
 | Razer Basilisk Mobile (Receiver)                              |  1532:00D4  |
 | Razer Basilisk V3 Pro 35K Phantom Green Edition (Wired)       |  1532:00D6  |
 | Razer Basilisk V3 Pro 35K Phantom Green Edition (Wireless)    |  1532:00D7  |
+| Razer Naga V3 Pro (Wired)                                     |  1532:00E7  |
+| Razer Naga V3 Pro (Wireless)                                  |  1532:00E8  |
 
 ### Mousemats
 | Device                                                        | USB VID:PID |

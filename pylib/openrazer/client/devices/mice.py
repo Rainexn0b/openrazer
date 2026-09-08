@@ -179,7 +179,8 @@ class RazerMouse(__RazerDevice):
         """
         Get the scroll wheel mode of the device
 
-        :return: The device's current scroll mode (0 = tactile, 1 = free spin)
+        :return: The device's current scroll mode (0 = tactile, 1 = free spin,
+                 2 = precision tactile where supported)
         :rtype: int
 
         :raises NotImplementedError: If function is not supported
@@ -194,7 +195,8 @@ class RazerMouse(__RazerDevice):
         """
         Set the scroll mode of the device
 
-        :param mode: The mode to set (0 = tactile, 1 = free spin)
+        :param mode: The mode to set (0 = tactile, 1 = free spin,
+                     2 = precision tactile where supported)
         :type mode: int
 
         :raises NotImplementedError: If function is not supported

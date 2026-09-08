@@ -6279,12 +6279,13 @@ static int razer_raw_event(struct hid_device *hdev, struct hid_report *report, u
         break;
     case USB_DEVICE_ID_RAZER_NAGA_V3_PRO_WIRED:
     case USB_DEVICE_ID_RAZER_NAGA_V3_PRO_WIRELESS:
-        /* Detect wheel tilt edges 
+        /* Detect wheel tilt edges
          * tilting produces data[0] 0x00->0x20->0x00 (left) or
          * 0x00->0x40->0x00 (right), nothing else changes. Map that straight
          * to F15/F16
         */
-        if (intf->cur_altsetting->desc.bInterfaceProtocol == USB_INTERFACE_PROTOCOL_MOUSE) {
+        if (intf->cur_altsetting->desc.bInterfaceProtocol == USB_INTERFACE_PROTOCOL_MOUSE
+            && size == 8 && rdev && rdev->input) {
             if (edge_bit(rdev->button_byte, data[0], 1 << BIT_TILT_L)) {
                 input_report_key(rdev->input, KEY_F15, !!(data[0] & (1 << BIT_TILT_L)));
                 input_sync(rdev->input);
@@ -7241,11 +7242,8 @@ static int razer_mouse_probe(struct hid_device *hdev, const struct hid_device_id
             CREATE_DEVICE_FILE(&hdev->dev, &dev_attr_matrix_effect_custom);
             CREATE_DEVICE_FILE(&hdev->dev, &dev_attr_matrix_custom_frame);
             break;
-            
+
         case USB_DEVICE_ID_RAZER_NAGA_V3_PRO_WIRELESS:
-            // CREATE_DEVICE_FILE(&hdev->dev, &dev_attr_charge_effect);
-            // CREATE_DEVICE_FILE(&hdev->dev, &dev_attr_charge_colour);
-            // fallthrough;
         case USB_DEVICE_ID_RAZER_NAGA_V3_PRO_WIRED:
             CREATE_DEVICE_FILE(&hdev->dev, &dev_attr_dpi);
             CREATE_DEVICE_FILE(&hdev->dev, &dev_attr_dpi_stages);

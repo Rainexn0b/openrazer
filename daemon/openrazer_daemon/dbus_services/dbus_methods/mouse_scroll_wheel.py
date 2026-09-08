@@ -8,13 +8,14 @@ def set_scroll_mode(self, mode):
     """
     Set the device's scroll mode
 
-    :param mode: The mode to set (0 = tactile, 1 = free spin)
+    :param mode: The mode to set (0 = tactile, 1 = free spin,
+                 2 = precision tactile where supported)
     :type mode: int
     """
     self.logger.debug("DBus call set_scroll_mode")
 
-    if mode not in (0, 1):
-        raise ValueError("mode has to be 0 or 1")
+    if not 0 <= mode <= self.SCROLL_MODE_MAX:
+        raise ValueError("mode has to be between 0 and {0}".format(self.SCROLL_MODE_MAX))
 
     driver_path = self.get_driver_path('scroll_mode')
 
@@ -27,7 +28,8 @@ def get_scroll_mode(self):
     """
     Get the device's current scroll mode
 
-    :return: The device's current scroll mode (0 = tactile, 1 = free spin)
+    :return: The device's current scroll mode (0 = tactile, 1 = free spin,
+             2 = precision tactile where supported)
     :rtype: int
     """
     self.logger.debug("DBus call get_scroll_mode")
