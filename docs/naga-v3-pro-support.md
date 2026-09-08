@@ -27,7 +27,7 @@ Naga V3 Pro. Device serial numbers are intentionally omitted.
 - [x] Integrate PR #2904 and harden its scroll-mode and raw-event handling.
 - [x] Regenerate metadata and pass the 269-device fake integration test.
 - [x] Install the fork through local pacman/DKMS packages.
-- [ ] Test the existing support implementation on this mouse in wired and
+- [x] Test the existing support implementation on this mouse in wired and
   HyperSpeed modes.
 
 ## Repository
@@ -190,6 +190,10 @@ dkms status
 systemctl --user status openrazer-daemon.service
 ```
 
+The three local packages are installed at `3.12.4.nagav3.1-5`. DKMS built and
+installed the driver for both `7.2.3-1-cachyos` and
+`6.18.48-1-cachyos-lts`.
+
 To roll back, remove the optional local Python client first, replace the local
 daemon and driver with repository packages, and reboot:
 
@@ -274,21 +278,22 @@ separate daemon identity design change.
 
 | Area | Wired `00E7` | Wireless `00E8` | Notes |
 | --- | --- | --- | --- |
-| Device discovery and daemon restart | Pass | Pending | Wired binds on all four HID interfaces and is rediscovered after daemon restart. |
-| Serial and firmware reads | Pass | Pending | Wired serial is stable and is not `UNKWN...`; firmware reads successfully. |
-| Battery and charge state | Partial | Pending | Wired reports 100% and charging; compare with a trusted reading in wireless mode. |
-| DPI read/write and stages | Partial | Pending | Normal writes, stage reads, and restoration pass. A shared 45,000 clamp blocks the advertised 50,000 maximum; a source fix is pending package installation. |
-| Poll rate | Pass | Pending | Writes and reads at 125, 500, and 1,000 Hz pass; the device does not expose a supported-rate list. |
-| Logo RGB | Pass | Pending | Static, spectrum, wave, reactive, breath, off, and independent brightness pass. |
-| Scroll-wheel RGB | Pass | Pending | Static, spectrum, wave, reactive, breath, off, and independent brightness pass. |
-| Side-button RGB | Partial | Pending | Global effects drive the side-button zone on the 12-button plate; the six-button plate remains untested. |
-| Scroll mode | Pass | Pending | Standard tactile `0`, free-spin `1`, and precision tactile `2` pass physically after allowing two seconds for changes. |
-| Scroll acceleration | Pass | Pending | Read/write passes and the setting was restored disabled. |
-| Smart Reel | Pass | Pending | Read/write passes and the setting was restored disabled. |
-| Buttons and wheel tilt | Pass | Pending | See the wired input mapping below. |
-| Suspend/resume and reconnect | Pending | Pending | Include switching wired/wireless modes. |
+| Device discovery and daemon restart | Pass | Pass | Both transports bind on all four HID interfaces and are rediscovered after hotplug or daemon restart. |
+| Serial and firmware reads | Pass | Pass | The serial is stable and is not `UNKWN...`; both transports report firmware `v1.0`. |
+| Battery and charge state | Partial | Partial | Wired reports 100% and charging; wireless reports 100% and not charging. Compare the level with a trusted reading. |
+| DPI read/write and stages | Pass | Pass | Normal writes, stage reads, 50,000 DPI, and restoration pass on both transports with `pkgrel=5`. |
+| Poll rate | Pass | Pass | Writes and reads at 125, 500, and 1,000 Hz pass; the device does not expose a supported-rate list. |
+| Logo RGB | Pass | Pass | Static, spectrum, wave, reactive, breath, off, and independent brightness pass. |
+| Scroll-wheel RGB | Pass | Pass | Static, spectrum, wave, reactive, breath, off, and independent brightness pass. |
+| Side-button RGB | Pass | Pass | Static, spectrum, reactive, breath, and off pass on the illuminated 12-button plate. The 6- and 2-button plates are unlit by design. |
+| Scroll mode | Pass | Pass | Standard tactile `0`, free-spin `1`, and precision tactile `2` pass physically after allowing two seconds for changes. |
+| Scroll acceleration | Pass | Pass | Read/write and physical behavior pass; the setting was restored disabled. |
+| Smart Reel | Pass | Pass | Read/write and physical behavior pass; the setting was restored disabled. |
+| Buttons and wheel tilt | Pass | Pass | Both transports produce the mapping below with no duplicate wheel-tilt events. |
+| Suspend/resume and reconnect | Pass | Partial | Suspend/resume passes on both transports. Receiver reconnect needs the mouse awake or a daemon restart; see below. |
 
-The wired 12-button input mapping was captured from all three event interfaces:
+The wired and wireless 12-button input mappings were captured from all three
+event interfaces on each transport:
 
 | Control | Linux input event |
 | --- | --- |
@@ -305,12 +310,28 @@ Wheel tilt emits only the expected F-key event; no duplicate `REL_HWHEEL`
 event was observed. No related kernel or daemon errors appeared during the
 capture.
 
-Two boundary tests need follow-up. The product advertises 50,000 DPI and the
-daemon accepts it, but the shared driver report builder clamps writes to
-45,000. A device-aware source fix preserves the existing 45,000 cap for other
-mice while allowing 50,000 for the Naga V3 Pro. Also, OpenRazer's low-battery
-setter supports thresholds only through 25%. Testing a 31% write therefore
-quantized the previous 30% setting to 25%; 25% is now the active threshold.
+The alternate side plates were also tested over HyperSpeed. The 6-button plate
+emits `KEY_1` through `KEY_6` in physical order. The front and rear controls on
+the 2-button plate emit `BTN_EXTRA` and `BTN_SIDE`, respectively. All events
+include clean press and release transitions.
+
+The initial 50,000 DPI boundary test exposed a shared driver clamp at 45,000.
+The device-aware fix in `pkgrel=5` preserves the existing 45,000 cap for other
+mice and now passes 50,000 DPI readback on both Naga V3 Pro transports.
+OpenRazer's low-battery setter supports thresholds only through 25%. Testing a
+31% write therefore quantized the previous 30% setting to 25%; 25% is now the
+active threshold.
+
+Global lighting commands produce the correct physical output, but per-zone
+effect-name getters can retain stale cached names afterward. Dedicated zone
+commands and brightness readback remain accurate.
+
+One receiver reconnect race remains. If the receiver is attached while the
+mouse is powered off or asleep, initial serial, mode, and battery commands can
+time out. The daemon's udev collection thread then exits without adding a
+usable Naga object. Wake the mouse before attaching the receiver, or restart
+`openrazer-daemon.service` after the mouse is awake. A daemon restart recovered
+the device immediately during testing.
 
 For each failure, retain relevant `dmesg` output and note the connection mode,
 firmware, side plate, command, expected behavior, and observed behavior. USB
