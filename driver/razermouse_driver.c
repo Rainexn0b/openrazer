@@ -10,8 +10,10 @@
 #include <linux/usb/input.h>
 #include <linux/hid.h>
 #include <linux/hrtimer.h>
+#include <linux/jiffies.h>
 #include <linux/random.h>
 #include <linux/version.h>
+#include <linux/workqueue.h>
 
 #include "razermouse_driver.h"
 #include "razercommon.h"
@@ -21,6 +23,10 @@
  * Version Information
  */
 #define DRIVER_DESC "Razer Mouse Device Driver"
+#define RAZER_DRIVER_MODE_IDLE_GUARD_MS 50000
+#define RAZER_DRIVER_MODE_RESTORE_DELAY_MS 250
+#define RAZER_DRIVER_MODE_RESTORE_RETRY_MS 1000
+#define RAZER_DRIVER_MODE_RESTORE_MAX_ATTEMPTS 3
 
 MODULE_AUTHOR(DRIVER_AUTHOR);
 MODULE_DESCRIPTION(DRIVER_DESC);
@@ -176,6 +182,40 @@ retry:
         print_erroneous_report(device->hdev, response, "Unknown error");
         WARN_ONCE(1, "Unknown response status received: %d\n", response->status);
         return -EIO;
+    }
+}
+
+static void razer_restore_driver_mode(struct work_struct *work)
+{
+    struct razer_mouse_device *device = container_of(to_delayed_work(work),
+                                                     struct razer_mouse_device,
+                                                     restore_driver_mode_work);
+    struct razer_report request = {0};
+    u8 mode = READ_ONCE(device->requested_device_mode);
+    u8 param = READ_ONCE(device->requested_device_mode_param);
+    u8 attempts = READ_ONCE(device->restore_driver_mode_attempts);
+    int err;
+
+    if (mode != 0x03)
+        return;
+
+    request = razer_chroma_standard_set_device_mode(mode, param);
+    request.transaction_id.id = 0x1f;
+    request.crc = razer_calculate_crc(&request);
+
+    /* The SET succeeds before the receiver can return a response after wake. */
+    mutex_lock(&device->lock);
+    err = razer_send_control_msg(device->hdev, &request, sizeof(request), 0x03,
+                                 RAZER_NEW_MOUSE_RECEIVER_WAIT_US);
+    mutex_unlock(&device->lock);
+
+    if (err && READ_ONCE(device->requested_device_mode) == 0x03
+        && attempts < RAZER_DRIVER_MODE_RESTORE_MAX_ATTEMPTS) {
+        WRITE_ONCE(device->restore_driver_mode_attempts, attempts + 1);
+        mod_delayed_work(system_wq, &device->restore_driver_mode_work,
+                         msecs_to_jiffies(RAZER_DRIVER_MODE_RESTORE_RETRY_MS));
+    } else if (!err) {
+        WRITE_ONCE(device->restore_driver_mode_attempts, 0);
     }
 }
 
@@ -3985,6 +4025,12 @@ static ssize_t razer_attr_write_device_mode(struct device *dev, struct device_at
         return -EINVAL;
     }
 
+    if (device->usb_pid == USB_DEVICE_ID_RAZER_NAGA_V3_PRO_WIRELESS && buf[0] != 0x03) {
+        WRITE_ONCE(device->requested_device_mode, buf[0]);
+        WRITE_ONCE(device->requested_device_mode_param, buf[1]);
+        cancel_delayed_work_sync(&device->restore_driver_mode_work);
+    }
+
     request = razer_chroma_standard_set_device_mode(buf[0], buf[1]);
 
     switch(device->usb_pid) {
@@ -4123,6 +4169,12 @@ static ssize_t razer_attr_write_device_mode(struct device *dev, struct device_at
     err = razer_send_payload(device, &request, &response);
     if (err)
         return err;
+
+    if (device->usb_pid == USB_DEVICE_ID_RAZER_NAGA_V3_PRO_WIRELESS) {
+        WRITE_ONCE(device->requested_device_mode, buf[0]);
+        WRITE_ONCE(device->requested_device_mode_param, buf[1]);
+        WRITE_ONCE(device->last_input_jiffies, jiffies);
+    }
 
     return count;
 }
@@ -6284,6 +6336,22 @@ static int razer_raw_event(struct hid_device *hdev, struct hid_report *report, u
         break;
     case USB_DEVICE_ID_RAZER_NAGA_V3_PRO_WIRED:
     case USB_DEVICE_ID_RAZER_NAGA_V3_PRO_WIRELESS:
+        /* Wireless idle resets device mode; restore it on the first wake report. */
+        if (hdev->product == USB_DEVICE_ID_RAZER_NAGA_V3_PRO_WIRELESS
+            && intf->cur_altsetting->desc.bInterfaceProtocol == USB_INTERFACE_PROTOCOL_MOUSE
+            && rdev
+            && READ_ONCE(rdev->requested_device_mode) == 0x03) {
+            unsigned long now = jiffies;
+            unsigned long last_input = READ_ONCE(rdev->last_input_jiffies);
+
+            if (time_after(now, last_input + msecs_to_jiffies(RAZER_DRIVER_MODE_IDLE_GUARD_MS))) {
+                WRITE_ONCE(rdev->restore_driver_mode_attempts, 1);
+                mod_delayed_work(system_wq, &rdev->restore_driver_mode_work,
+                                 msecs_to_jiffies(RAZER_DRIVER_MODE_RESTORE_DELAY_MS));
+            }
+            WRITE_ONCE(rdev->last_input_jiffies, now);
+        }
+
         /* Detect wheel tilt edges
          * tilting produces data[0] 0x00->0x20->0x00 (left) or
          * 0x00->0x40->0x00 (right), nothing else changes. Map that straight
@@ -6497,6 +6565,8 @@ static void razer_mouse_init(struct razer_mouse_device *dev, struct hid_device *
     dev->tilt_hwheel = 1;
     dev->tilt_repeat_delay = 250;
     dev->tilt_repeat = 33;
+    INIT_DELAYED_WORK(&dev->restore_driver_mode_work, razer_restore_driver_mode);
+    dev->last_input_jiffies = jiffies;
 }
 
 /**
@@ -8800,6 +8870,8 @@ static void razer_mouse_disconnect(struct hid_device *hdev)
 
     }
 
+    WRITE_ONCE(dev->requested_device_mode, 0x00);
+    cancel_delayed_work_sync(&dev->restore_driver_mode_work);
     hid_hw_stop(hdev);
     hrtimer_cancel(&dev->repeat_timer);
 

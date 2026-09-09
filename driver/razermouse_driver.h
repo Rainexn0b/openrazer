@@ -149,6 +149,12 @@ struct razer_mouse_device {
     u8 button_byte; // Previous value of mouse button byte in HID record
     u8 rep4[16]; // Previous value of report 4 on the keyboard intf
 
+    struct delayed_work restore_driver_mode_work;
+    unsigned long last_input_jiffies;
+    u8 requested_device_mode;
+    u8 requested_device_mode_param;
+    u8 restore_driver_mode_attempts;
+
     unsigned char usb_interface_protocol;
     unsigned char usb_interface_subclass;
 
