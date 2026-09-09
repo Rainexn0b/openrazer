@@ -290,8 +290,8 @@ separate daemon identity design change.
 | Scroll acceleration | Pass | Pass | Read/write and physical behavior pass; the setting was restored disabled. |
 | Smart Reel | Pass | Pass | Read/write and physical behavior pass; the setting was restored disabled. |
 | Buttons and wheel tilt | Pass | Pass | Both transports produce the mapping below with no duplicate wheel-tilt events. |
-| Desktop applications | Pass | Not tested | Polychromatic exposes working device controls, and Input Remapper detects and remaps the special inputs. |
-| Suspend/resume and reconnect | Pass | Partial | Suspend/resume passes on both transports. Receiver reconnect needs the mouse awake or a daemon restart; see below. |
+| Desktop applications | Pass | Pass | Polychromatic exposes working device controls, and Input Remapper detects and remaps the special inputs. |
+| Suspend/resume and reconnect | Pass | Pass | Suspend/resume passes on both transports. Wireless hotplug and daemon startup recover automatically when the mouse wakes. |
 
 The wired and wireless 12-button input mappings were captured from all three
 event interfaces on each transport:
@@ -316,10 +316,10 @@ emits `KEY_1` through `KEY_6` in physical order. The front and rear controls on
 the 2-button plate emit `BTN_EXTRA` and `BTN_SIDE`, respectively. All events
 include clean press and release transitions.
 
-Desktop integration was verified in wired mode. Polychromatic detects the Naga
-and provides working lighting, brightness, polling, sleep, low-battery, scroll,
-and DPI controls, including a 50,000 DPI stage. Input Remapper detects the
-Naga's input interfaces, records the special F-key events such as `KEY_F17`,
+Desktop integration was verified on both transports. Polychromatic detects the
+Naga and provides working lighting, brightness, polling, sleep, low-battery,
+scroll, and DPI controls, including a 50,000 DPI stage. Input Remapper detects
+the Naga's input interfaces, records the special F-key events such as `KEY_F17`,
 and applies remappings successfully.
 
 The initial 50,000 DPI boundary test exposed a shared driver clamp at 45,000.
@@ -333,12 +333,14 @@ Global lighting commands produce the correct physical output, but per-zone
 effect-name getters can retain stale cached names afterward. Dedicated zone
 commands and brightness readback remain accurate.
 
-One receiver reconnect race remains. If the receiver is attached while the
-mouse is powered off or asleep, initial serial, mode, and battery commands can
-time out. The daemon's udev collection thread then exits without adding a
-usable Naga object. Wake the mouse before attaching the receiver, or restart
-`openrazer-daemon.service` after the mouse is awake. A daemon restart recovered
-the device immediately during testing.
+Wireless recovery was tested both by attaching the receiver while the mouse was
+off and by starting the daemon while the receiver was present and the mouse was
+off. The daemon remained available with the dock, retried the timed-out Naga
+initialization, and emitted its device-added signal with the real serial after
+the mouse woke. Polychromatic then recognized the wireless Naga without a
+daemon restart. If the mouse remains unavailable beyond the bounded retry
+window, reconnect the receiver or restart `openrazer-daemon.service` after the
+mouse is awake.
 
 For each failure, retain relevant `dmesg` output and note the connection mode,
 firmware, side plate, command, expected behavior, and observed behavior. USB
