@@ -290,8 +290,8 @@ separate daemon identity design change.
 | Scroll acceleration | Pass | Pass | Read/write and physical behavior pass; the setting was restored disabled. |
 | Smart Reel | Pass | Pass | Read/write and physical behavior pass; the setting was restored disabled. |
 | Buttons and wheel tilt | Pass | Pass | Both transports produce the mapping below with no duplicate wheel-tilt events. |
-| Desktop applications | Pass | Pass | Polychromatic exposes working device controls, and Input Remapper detects and remaps the special inputs. |
-| Suspend/resume and reconnect | Pass | Pass | Suspend/resume passes on both transports. Wireless hotplug and daemon startup recover automatically when the mouse wakes. |
+| Desktop applications | Partial | Partial | Polychromatic controls work but its scroll-mode menu omits precision tactile mode `2`; Input Remapper detects and remaps the special inputs. |
+| Suspend/resume and reconnect | Pass | Pass | Suspend/resume passes on both transports. Wireless hotplug, daemon startup, and driver-mode restoration after idle wake recover automatically. |
 
 The wired and wireless 12-button input mappings were captured from all three
 event interfaces on each transport:
@@ -321,6 +321,22 @@ Naga and provides working lighting, brightness, polling, sleep, low-battery,
 scroll, and DPI controls, including a 50,000 DPI stage. Input Remapper detects
 the Naga's input interfaces, records the special F-key events such as `KEY_F17`,
 and applies remappings successfully.
+
+Polychromatic 0.9.8 only offers tactile mode `0` and free-spin mode `1` in its
+scroll-mode menu. Its OpenRazer backend hard-codes those two choices and the
+current OpenRazer D-Bus API does not expose a device-specific maximum scroll
+mode that clients can query. Precision tactile mode `2` still works physically
+when selected through the OpenRazer API. This downstream UI gap was also
+present with the original Naga V3 Pro pull request and requires a coordinated
+OpenRazer capability API and Polychromatic backend change for a generic fix.
+
+The wireless mouse resets from driver mode `3:0` to device mode `0:0` when its
+idle timer expires. In device mode the ring-finger button does not emit the
+keyboard report that the driver translates to `KEY_F17`. The mouse driver now
+remembers an explicit driver-mode request and reapplies it asynchronously after
+the first mouse report following a long idle period. A 60-second idle test
+confirmed that normal sleep still occurs, the wake report restores driver mode,
+and three subsequent ring-finger presses produce clean `KEY_F17` transitions.
 
 The initial 50,000 DPI boundary test exposed a shared driver clamp at 45,000.
 The device-aware fix in `pkgrel=5` preserves the existing 45,000 cap for other
