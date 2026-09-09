@@ -7,7 +7,7 @@ pkgname=(
   python-openrazer-local
 )
 pkgver=3.12.4.nagav3.1
-pkgrel=5
+pkgrel=6
 pkgdesc='OpenRazer with local Razer Naga V3 Pro support'
 arch=(any)
 url=https://github.com/Rainexn0b/openrazer
@@ -17,7 +17,7 @@ makedepends=(
   python-setuptools
 )
 source=(
-  'openrazer::git+https://github.com/Rainexn0b/openrazer.git#commit=214184a64a11fcb718d5f8356addf45b279141d0'
+  'openrazer::git+https://github.com/Rainexn0b/openrazer.git#commit=77a12fac54514d526d88d23ff67a0daafa8d5e69'
   sysusers.conf
   dkms-make
 )
