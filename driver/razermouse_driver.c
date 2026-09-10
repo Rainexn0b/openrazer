@@ -108,7 +108,7 @@ static int razer_get_report(struct hid_device *hdev, struct razer_report *reques
 
     case USB_DEVICE_ID_RAZER_NAGA_V3_PRO_WIRELESS:
         index = 0x03;
-        return razer_get_usb_response(hdev, index, request, index, response, RAZER_NEW_MOUSE_RECEIVER_WAIT_US);
+        return razer_get_usb_response(hdev, index, request, index, response, RAZER_NAGA_V3_PRO_WAIT_US);
         break;
 
     default:
