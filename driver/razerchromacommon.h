@@ -146,8 +146,11 @@ struct razer_report razer_naga_trinity_effect_breathing_random(void);
 struct razer_report razer_naga_trinity_effect_spectrum(void);
 struct razer_report razer_naga_trinity_effect_none(void);
 
-struct razer_report razer_chroma_misc_set_scroll_mode(unsigned int scroll_mode);
-struct razer_report razer_chroma_misc_get_scroll_mode(void);
+struct razer_report razer_chroma_misc_set_scroll_mode_v1(unsigned int scroll_mode);
+struct razer_report razer_chroma_misc_get_scroll_mode_v1(void);
+
+struct razer_report razer_chroma_misc_set_scroll_mode_v2(unsigned int scroll_mode);
+struct razer_report razer_chroma_misc_get_scroll_mode_v2(void);
 
 struct razer_report razer_chroma_misc_set_scroll_acceleration(bool acceleration);
 struct razer_report razer_chroma_misc_get_scroll_acceleration(void);
@@ -156,9 +159,6 @@ struct razer_report razer_chroma_misc_set_scroll_smart_reel(bool smart_reel);
 struct razer_report razer_chroma_misc_get_scroll_smart_reel(void);
 
 struct razer_report razer_chroma_misc_get_hyperpolling_wireless_dongle_indicator_led_mode(void);
-
-struct razer_report razer_chroma_misc_set_scroll_mode_naga_v3_pro(unsigned int scroll_mode);
-struct razer_report razer_chroma_misc_get_scroll_mode_naga_v3_pro(void);
 
 struct razer_report razer_chroma_misc_set_scroll_smart_reel_naga_v3_pro(bool smart_reel);
 

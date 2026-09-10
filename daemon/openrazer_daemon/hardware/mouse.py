@@ -1051,9 +1051,10 @@ class RazerNagaV3ProWired(RazerNagaV2ProWired):
     USB_PID = 0x00E7
     DPI_MAX = 50000
     DRIVER_MODE = True
+    SCROLL_MODE_VERSION = 2
     METHODS = RazerNagaV2ProWired.METHODS + [
         # Scroll wheel controls
-        'get_scroll_mode', 'set_scroll_mode',
+        'get_scroll_mode', 'set_scroll_mode', 'get_scroll_mode_options',
         'get_scroll_acceleration', 'set_scroll_acceleration',
         'get_scroll_smart_reel', 'set_scroll_smart_reel',
         # Scroll wheel
@@ -1222,6 +1223,7 @@ class RazerBasiliskV3(__RazerDevice):
     USB_PID = 0x0099
     HAS_MATRIX = True
     MATRIX_DIMS = [1, 11]
+    SCROLL_MODE_VERSION = 1
     METHODS = ['get_device_type_mouse',
                'max_dpi', 'get_dpi_xy', 'set_dpi_xy', 'get_dpi_stages', 'set_dpi_stages',
                'get_poll_rate', 'set_poll_rate',
@@ -1229,7 +1231,7 @@ class RazerBasiliskV3(__RazerDevice):
                'get_logo_brightness', 'set_logo_brightness',
                'get_scroll_brightness', 'set_scroll_brightness',
                # Scroll wheel controls
-               'get_scroll_mode', 'set_scroll_mode',
+               'get_scroll_mode', 'set_scroll_mode', 'get_scroll_mode_options',
                'get_scroll_acceleration', 'set_scroll_acceleration',
                'get_scroll_smart_reel', 'set_scroll_smart_reel',
                # All LEDs (partial support)
@@ -1724,6 +1726,7 @@ class RazerBasiliskV3ProWired(__RazerDevice):
     USB_PID = 0x00AA
     HAS_MATRIX = True
     MATRIX_DIMS = [1, 13]
+    SCROLL_MODE_VERSION = 1
     METHODS = ['get_device_type_mouse',
                'max_dpi', 'get_dpi_xy', 'set_dpi_xy', 'get_dpi_stages', 'set_dpi_stages',
                'get_poll_rate', 'set_poll_rate',
@@ -1731,7 +1734,7 @@ class RazerBasiliskV3ProWired(__RazerDevice):
                'get_logo_brightness', 'set_logo_brightness',
                'get_scroll_brightness', 'set_scroll_brightness',
                # Scroll wheel controls
-               'get_scroll_mode', 'set_scroll_mode',
+               'get_scroll_mode', 'set_scroll_mode', 'get_scroll_mode_options',
                'get_scroll_acceleration', 'set_scroll_acceleration',
                'get_scroll_smart_reel', 'set_scroll_smart_reel',
                # All LEDs (partial support)
@@ -1768,6 +1771,7 @@ class RazerBasiliskV3Pro35KWired(__RazerDevice):
     USB_PID = 0x00CC
     HAS_MATRIX = True
     MATRIX_DIMS = [1, 13]
+    SCROLL_MODE_VERSION = 1
     METHODS = ['get_device_type_mouse',
                'max_dpi', 'get_dpi_xy', 'set_dpi_xy', 'get_dpi_stages', 'set_dpi_stages',
                'get_poll_rate', 'set_poll_rate',
@@ -1775,7 +1779,7 @@ class RazerBasiliskV3Pro35KWired(__RazerDevice):
                'get_logo_brightness', 'set_logo_brightness',
                'get_scroll_brightness', 'set_scroll_brightness',
                # Scroll wheel controls
-               'get_scroll_mode', 'set_scroll_mode',
+               'get_scroll_mode', 'set_scroll_mode', 'get_scroll_mode_options',
                'get_scroll_acceleration', 'set_scroll_acceleration',
                'get_scroll_smart_reel', 'set_scroll_smart_reel',
                # All LEDs (partial support)
@@ -1810,13 +1814,14 @@ class RazerBasiliskV3Pro35KPhantomGreenEditionWired(__RazerDevice):
     USB_PID = 0x00D6
     HAS_MATRIX = True
     MATRIX_DIMS = [1, 12]
+    SCROLL_MODE_VERSION = 1
     METHODS = ['get_device_type_mouse',
                'max_dpi', 'get_dpi_xy', 'set_dpi_xy', 'get_dpi_stages', 'set_dpi_stages',
                'get_poll_rate', 'set_poll_rate',
                'get_brightness', 'set_brightness',
                'get_scroll_brightness', 'set_scroll_brightness',
                # Scroll wheel controls
-               'get_scroll_mode', 'set_scroll_mode',
+               'get_scroll_mode', 'set_scroll_mode', 'get_scroll_mode_options',
                'get_scroll_acceleration', 'set_scroll_acceleration',
                'get_scroll_smart_reel', 'set_scroll_smart_reel',
                # All LEDs (partial support)
@@ -1852,6 +1857,7 @@ class RazerBasiliskV3_35K(__RazerDevice):
     USB_PID = 0x00CB
     HAS_MATRIX = True
     MATRIX_DIMS = [1, 13]
+    SCROLL_MODE_VERSION = 1
     METHODS = ['get_device_type_mouse',
                'max_dpi', 'get_dpi_xy', 'set_dpi_xy', 'get_dpi_stages', 'set_dpi_stages',
                'get_poll_rate', 'set_poll_rate',
@@ -1859,7 +1865,7 @@ class RazerBasiliskV3_35K(__RazerDevice):
                'get_logo_brightness', 'set_logo_brightness',
                'get_scroll_brightness', 'set_scroll_brightness',
                # Scroll wheel controls
-               'get_scroll_mode', 'set_scroll_mode',
+               'get_scroll_mode', 'set_scroll_mode', 'get_scroll_mode_options',
                'get_scroll_acceleration', 'set_scroll_acceleration',
                'get_scroll_smart_reel', 'set_scroll_smart_reel',
                # All LEDs (partial support)
