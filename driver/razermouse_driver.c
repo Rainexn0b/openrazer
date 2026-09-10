@@ -2877,6 +2877,24 @@ static ssize_t razer_attr_read_dpi(struct device *dev, struct device_attribute *
 }
 
 /**
+ * Get the scroll wheel mode protocol version for the device
+ *
+ * v1: tactile, free-spin
+ * v2: tactile, free-spin, precision tactile
+ */
+static unsigned int razer_mouse_scroll_mode_version(struct razer_mouse_device *device)
+{
+    switch (device->usb_pid) {
+    case USB_DEVICE_ID_RAZER_NAGA_V3_PRO_WIRED:
+    case USB_DEVICE_ID_RAZER_NAGA_V3_PRO_WIRELESS:
+        return 2;
+
+    default:
+        return 1;
+    }
+}
+
+/**
  * Write device file "scroll_mode"
  *
  * Sets the scroll mode of the mouse.
@@ -2887,6 +2905,7 @@ static ssize_t razer_attr_write_scroll_mode(struct device *dev, struct device_at
     struct razer_report request = {0};
     struct razer_report response = {0};
     unsigned int scroll_mode;
+    unsigned int scroll_mode_version = razer_mouse_scroll_mode_version(device);
     unsigned int scroll_mode_max;
     int err;
 
@@ -2903,15 +2922,14 @@ static ssize_t razer_attr_write_scroll_mode(struct device *dev, struct device_at
 
     if (kstrtouint(buf, 0, &scroll_mode) < 0 || scroll_mode > scroll_mode_max)
         return -EINVAL;
-
     switch (device->usb_pid) {
     case USB_DEVICE_ID_RAZER_NAGA_V3_PRO_WIRED:
     case USB_DEVICE_ID_RAZER_NAGA_V3_PRO_WIRELESS:
-        request = razer_chroma_misc_set_scroll_mode_naga_v3_pro(scroll_mode);
+        request = razer_chroma_misc_set_scroll_mode_v2(scroll_mode);
         break;
 
     default:
-        request = razer_chroma_misc_set_scroll_mode(scroll_mode);
+        request = razer_chroma_misc_set_scroll_mode_v1(scroll_mode);
         break;
     }
     request.transaction_id.id = 0x1f;
@@ -2934,15 +2952,15 @@ static ssize_t razer_attr_read_scroll_mode(struct device *dev, struct device_att
     struct razer_report request = {0};
     struct razer_report response = {0};
     int err;
-
+    
     switch (device->usb_pid) {
     case USB_DEVICE_ID_RAZER_NAGA_V3_PRO_WIRED:
     case USB_DEVICE_ID_RAZER_NAGA_V3_PRO_WIRELESS:
-        request = razer_chroma_misc_get_scroll_mode_naga_v3_pro();
+        request = razer_chroma_misc_get_scroll_mode_v2();
         break;
-
+    
     default:
-        request = razer_chroma_misc_get_scroll_mode();
+        request = razer_chroma_misc_get_scroll_mode_v1();
         break;
     }
     request.transaction_id.id = 0x1f;

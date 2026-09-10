@@ -1213,8 +1213,8 @@ struct razer_report razer_chroma_misc_set_dpi_xy(unsigned char variable_storage,
     struct razer_report report = get_razer_report(0x04, 0x05, 0x07);
 
     // Keep the DPI within bounds
-    dpi_x = clamp(dpi_x, 100, 45000);
-    dpi_y = clamp(dpi_y, 100, 45000);
+    dpi_x = clamp(dpi_x, 100, 50000);
+    dpi_y = clamp(dpi_y, 100, 50000);
 
     report.arguments[0] = VARSTORE;
 
@@ -1464,13 +1464,13 @@ struct razer_report razer_naga_trinity_effect_static(struct razer_rgb *rgb)
 }
 
 /**
- * Set scroll wheel mode on the device
+ * Set scroll wheel mode on the device (protocol v1: tactile / free-spin)
  *
  * Status Trans Packet Proto DataSize Class CMD Args
  * 00     1f    0000   00    02       02    14  0100    | SET SCROLL WHEEL MODE (VARSTR, TACTILE)
  * 00     1f    0000   00    02       02    14  0101    | SET SCROLL WHEEL MODE (VARSTR, FREESPIN)
  */
-struct razer_report razer_chroma_misc_set_scroll_mode(unsigned int scroll_mode)
+struct razer_report razer_chroma_misc_set_scroll_mode_v1(unsigned int scroll_mode)
 {
     struct razer_report report = get_razer_report(0x02, 0x14, 0x02);
 
@@ -1481,9 +1481,9 @@ struct razer_report razer_chroma_misc_set_scroll_mode(unsigned int scroll_mode)
 }
 
 /**
- * Get scroll wheel mode from the device
+ * Get scroll wheel mode from the device (protocol v1)
  */
-struct razer_report razer_chroma_misc_get_scroll_mode(void)
+struct razer_report razer_chroma_misc_get_scroll_mode_v1(void)
 {
     struct razer_report report = get_razer_report(0x02, 0x94, 0x02);
 
@@ -1493,14 +1493,14 @@ struct razer_report razer_chroma_misc_get_scroll_mode(void)
 }
 
 /**
- * Set scroll wheel mode on the device (Naga V3 Pro variant)
+ * Set scroll wheel mode on the device (protocol v2: tactile / free-spin / precision tactile)
  *
  * Status Trans Packet Proto DataSize Class CMD Args
  * 00     1f    0000   00    02       02    30  0100    | SET SCROLL WHEEL MODE (VARSTR, TACTILE)
  * 00     1f    0000   00    02       02    30  0101    | SET SCROLL WHEEL MODE (VARSTR, FREE-SPIN)
  * 00     1f    0000   00    02       02    30  0102    | SET SCROLL WHEEL MODE (VARSTR, PRECISION TACTILE)
  */
-struct razer_report razer_chroma_misc_set_scroll_mode_naga_v3_pro(unsigned int scroll_mode)
+struct razer_report razer_chroma_misc_set_scroll_mode_v2(unsigned int scroll_mode)
 {
     struct razer_report report = get_razer_report(0x02, 0x30, 0x02);
 
@@ -1511,9 +1511,9 @@ struct razer_report razer_chroma_misc_set_scroll_mode_naga_v3_pro(unsigned int s
 }
 
 /**
- * Get scroll wheel mode from the device (Naga V3 Pro variant)
+ * Get scroll wheel mode from the device (protocol v2)
  */
-struct razer_report razer_chroma_misc_get_scroll_mode_naga_v3_pro(void)
+struct razer_report razer_chroma_misc_get_scroll_mode_v2(void)
 {
     struct razer_report report = get_razer_report(0x02, 0xB0, 0x02);
 
