@@ -2952,13 +2952,13 @@ static ssize_t razer_attr_read_scroll_mode(struct device *dev, struct device_att
     struct razer_report request = {0};
     struct razer_report response = {0};
     int err;
-    
+
     switch (device->usb_pid) {
     case USB_DEVICE_ID_RAZER_NAGA_V3_PRO_WIRED:
     case USB_DEVICE_ID_RAZER_NAGA_V3_PRO_WIRELESS:
         request = razer_chroma_misc_get_scroll_mode_v2();
         break;
-    
+
     default:
         request = razer_chroma_misc_get_scroll_mode_v1();
         break;
@@ -7262,11 +7262,8 @@ static int razer_mouse_probe(struct hid_device *hdev, const struct hid_device_id
             CREATE_DEVICE_FILE(&hdev->dev, &dev_attr_matrix_effect_custom);
             CREATE_DEVICE_FILE(&hdev->dev, &dev_attr_matrix_custom_frame);
             break;
-            
+
         case USB_DEVICE_ID_RAZER_NAGA_V3_PRO_WIRELESS:
-            // CREATE_DEVICE_FILE(&hdev->dev, &dev_attr_charge_effect);
-            // CREATE_DEVICE_FILE(&hdev->dev, &dev_attr_charge_colour);
-            // fallthrough;
         case USB_DEVICE_ID_RAZER_NAGA_V3_PRO_WIRED:
             CREATE_DEVICE_FILE(&hdev->dev, &dev_attr_dpi);
             CREATE_DEVICE_FILE(&hdev->dev, &dev_attr_dpi_stages);
