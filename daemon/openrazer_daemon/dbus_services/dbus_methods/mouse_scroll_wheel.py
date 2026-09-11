@@ -8,6 +8,7 @@ SCROLL_MODES_BY_VERSION = {
     2: ["tactile", "free_spin", "precision_tactile"],
 }
 
+
 @endpoint('razer.device.scroll', 'setScrollMode', in_sig='y')
 def set_scroll_mode(self, mode):
     """
