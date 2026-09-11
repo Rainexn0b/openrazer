@@ -1052,20 +1052,18 @@ class RazerNagaV3ProWired(RazerNagaV2ProWired):
     DPI_MAX = 50000
     DRIVER_MODE = True
     SCROLL_MODE_VERSION = 2
-    METHODS = RazerNagaV2ProWired.METHODS + [
-        # Scroll wheel controls
-        'get_scroll_mode', 'set_scroll_mode', 'get_scroll_mode_options',
-        'get_scroll_acceleration', 'set_scroll_acceleration',
-        'get_scroll_smart_reel', 'set_scroll_smart_reel',
-        # Scroll wheel
-        'get_scroll_brightness', 'set_scroll_brightness', 'set_scroll_wave', 'set_scroll_static', 'set_scroll_spectrum', 
-        'set_scroll_none', 'set_scroll_reactive', 'set_scroll_breath_random', 'set_scroll_breath_single', 'set_scroll_breath_dual']
+    METHODS = RazerNagaV2ProWired.METHODS + ['get_scroll_mode', 'set_scroll_mode', 'get_scroll_mode_options',
+                                             'get_scroll_acceleration', 'set_scroll_acceleration', 'get_scroll_smart_reel', 'set_scroll_smart_reel',
+                                             'get_scroll_brightness', 'set_scroll_brightness', 'set_scroll_wave', 'set_scroll_static', 'set_scroll_spectrum',
+                                             'set_scroll_none', 'set_scroll_reactive', 'set_scroll_breath_random', 'set_scroll_breath_single', 'set_scroll_breath_dual']
+
 
 class RazerNagaV3ProWireless(RazerNagaV3ProWired):
     """
     Class for the Razer Naga V3 Pro (Wireless)
     """
     USB_PID = 0x00E8
+
 
 class RazerDeathAdder1800(__RazerDevice):
     """
