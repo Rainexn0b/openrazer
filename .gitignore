@@ -53,9 +53,13 @@ compile_commands.json
 *.pyc
 __pycache__
 
+# build files
+.venv
 dist
 build
 *.egg-info
+
+# project
 .idea
 .project
 .cproject
