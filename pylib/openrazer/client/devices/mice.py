@@ -205,7 +205,7 @@ class RazerMouse(__RazerDevice):
             raise NotImplementedError()
 
     @property
-    def scroll_mode_options(self) -> list:
+    def scroll_mode_options(self) -> list[str]:
         """
         Get the scroll modes supported by the device
 
