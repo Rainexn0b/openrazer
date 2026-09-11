@@ -6297,7 +6297,7 @@ static int razer_raw_event(struct hid_device *hdev, struct hid_report *report, u
         break;
     case USB_DEVICE_ID_RAZER_NAGA_V3_PRO_WIRED:
     case USB_DEVICE_ID_RAZER_NAGA_V3_PRO_WIRELESS:
-        /* Detect wheel tilt edges 
+        /* Detect wheel tilt edges
          * tilting produces data[0] 0x00->0x20->0x00 (left) or
          * 0x00->0x40->0x00 (right), nothing else changes. Map that straight
          * to F15/F16
@@ -6314,7 +6314,7 @@ static int razer_raw_event(struct hid_device *hdev, struct hid_report *report, u
             rdev->button_byte = data[0];
         }
 
-        /* Default behaviour +  Hypershift mode toggle workaround */
+        /* Default behaviour +  Hypershift mode toggle workaround + AI Prompt Master button */
         if(intf->cur_altsetting->desc.bInterfaceProtocol == USB_INTERFACE_PROTOCOL_KEYBOARD && size == 16 && data[0] == 0x04) {
             int index = size-1;
 
@@ -6339,6 +6339,9 @@ static int razer_raw_event(struct hid_device *hdev, struct hid_report *report, u
                     break;
                 case 0x59: // Hypershift mode toggle (workaround: don't change the "scroll mode" in this button)
                     cur_value = 0x6C; // F17
+                    break;
+                case 0xD2: // AI Prompt Master button
+                    cur_value = 0x6D; // F18
                     break;
                 }
 
