@@ -194,7 +194,6 @@ static void razer_restore_driver_mode(struct work_struct *work)
     u8 mode = READ_ONCE(device->requested_device_mode);
     u8 param = READ_ONCE(device->requested_device_mode_param);
     u8 attempts = READ_ONCE(device->restore_driver_mode_attempts);
-    int err;
 
     if (mode != 0x03)
         return;
@@ -205,16 +204,18 @@ static void razer_restore_driver_mode(struct work_struct *work)
 
     /* The SET succeeds before the receiver can return a response after wake. */
     mutex_lock(&device->lock);
-    err = razer_send_control_msg(device->hdev, &request, sizeof(request), 0x03,
-                                 RAZER_NEW_MOUSE_RECEIVER_WAIT_US);
+    razer_send_control_msg(device->hdev, &request, sizeof(request), 0x03,
+                           RAZER_NEW_MOUSE_RECEIVER_WAIT_US);
     mutex_unlock(&device->lock);
 
-    if (err && READ_ONCE(device->requested_device_mode) == 0x03
+    /* A successful USB transfer cannot confirm that the waking mouse applied
+     * this fire-and-forget command, so complete all bounded attempts. */
+    if (READ_ONCE(device->requested_device_mode) == 0x03
         && attempts < RAZER_DRIVER_MODE_RESTORE_MAX_ATTEMPTS) {
         WRITE_ONCE(device->restore_driver_mode_attempts, attempts + 1);
         mod_delayed_work(system_wq, &device->restore_driver_mode_work,
                          msecs_to_jiffies(RAZER_DRIVER_MODE_RESTORE_RETRY_MS));
-    } else if (!err) {
+    } else {
         WRITE_ONCE(device->restore_driver_mode_attempts, 0);
     }
 }
