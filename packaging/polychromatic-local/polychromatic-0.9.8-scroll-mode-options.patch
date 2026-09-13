@@ -1,0 +1,41 @@
+--- a/polychromatic/backends/openrazer.py
++++ b/polychromatic/backends/openrazer.py
+@@ -553,3 +553,5 @@ class OpenRazerBackend(Backend):
+         elif device_name.find("Nommo") != -1:
+             form_factor_id = "speaker"
++        elif device_name.find("Seiren") != -1:
++            form_factor_id = "microphone"
+         elif device_name.find("Raptor") != -1:
+@@ -1490,2 +1492,9 @@ class OpenRazerBackend(Backend):
+         if rdevice.has("scroll_mode"):
++            if rdevice.has("scroll_mode_options"):
++                # Introduced in OpenRazer >=3.13.0*
++                modes = rdevice.scroll_mode_options
++            else:
++                # OpenRazer <=3.12.0, all mice shared two options
++                modes = ["tactile", "free_spin"]
++
+             tactile = Backend.Option.Parameter()
+@@ -1498,1 +1507,5 @@ class OpenRazerBackend(Backend):
+             free_spin.label = self._("Free Spin")
++
++            precision_tactile = Backend.Option.Parameter()
++            precision_tactile.data = 2
++            precision_tactile.label = self._("Precision Tactile")
+@@ -1507,1 +1520,2 @@ class OpenRazerBackend(Backend):
+                     free_spin.active = rdevice.scroll_mode == 1
++                    precision_tactile.active = rdevice.scroll_mode == 2
+@@ -1515,4 +1529,12 @@ class OpenRazerBackend(Backend):
+             scroll_mode.icon = self.get_icon("devices", "mouse")
+-            scroll_mode.parameters = [tactile, free_spin]
++            scroll_mode.parameters = []
+             scroll_mode.refresh()
++
++            if "tactile" in modes:
++                scroll_mode.parameters.append(tactile)
++            if "free_spin" in modes:
++                scroll_mode.parameters.append(free_spin)
++            if "precision_tactile" in modes:
++                scroll_mode.parameters.append(precision_tactile)
++
+             options.append(scroll_mode)

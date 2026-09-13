@@ -7,8 +7,10 @@ OpenRazer Naga V3 Pro pull request and its companion Polychromatic scroll-mode
 branch. It preserves the exact commits tested, the hardware observations, the
 feedback sent upstream, and the known-good local restore point.
 
-The test branches are no longer installed. The system was restored to the
-known-good local OpenRazer build and stock Polychromatic after testing.
+The OpenRazer test branch is no longer installed. On September 13, the
+compatible scroll-mode capability was ported onto the known-good local
+OpenRazer branch and the corrected Polychromatic backend was adopted as the
+new baseline.
 
 ## Hardware and environment
 
@@ -30,12 +32,17 @@ as OpenRazer D-Bus identities.
 The baseline is the pushed `add-razer-naga-v3-pro-support` branch at:
 
 ```text
-f7529942032374175ae8ee9a8f93c1f49fb44d45
+2416bfebf0175db6aae519a450f55fe9eba255e9
 ```
 
 The relevant baseline commits are:
 
 ```text
+2416bfeb package reliable scroll mode baseline
+1a250c1c retry Naga driver mode restoration
+3444225a package scroll mode capability
+5532eca5 expose supported scroll modes
+b6ed426c document upstream Naga branch testing
 f7529942 package Naga idle idle driver mode restoration
 eb637a0a document Naga idle mode restoration
 09a922ce restore Naga driver mode after wireless idle
@@ -43,14 +50,13 @@ eb637a0a document Naga idle mode restoration
 77a12fac retry unavailable devices during discovery
 ```
 
-At the end of the test and restore work, before this report was added, the
-repository was clean and synchronized with the fork. The following packages
+After the capability integration and physical retest, the following packages
 were installed:
 
 ```text
-openrazer-daemon-local 3.12.4.nagav3.1-7
-openrazer-driver-dkms-local 3.12.4.nagav3.1-7
-python-openrazer-local 3.12.4.nagav3.1-7
+openrazer-daemon-local 3.12.4.nagav3.1-9
+openrazer-driver-dkms-local 3.12.4.nagav3.1-9
+python-openrazer-local 3.12.4.nagav3.1-9
 polychromatic 0.9.8-1
 ```
 
@@ -63,16 +69,16 @@ IgnorePkg = openrazer-daemon-local openrazer-driver-dkms-local python-openrazer-
 The local restore packages are:
 
 ```text
-packaging/arch-local/openrazer-daemon-local-3.12.4.nagav3.1-7-any.pkg.tar.zst
-packaging/arch-local/openrazer-driver-dkms-local-3.12.4.nagav3.1-7-any.pkg.tar.zst
-packaging/arch-local/python-openrazer-local-3.12.4.nagav3.1-7-any.pkg.tar.zst
+packaging/arch-local/openrazer-daemon-local-3.12.4.nagav3.1-9-any.pkg.tar.zst
+packaging/arch-local/openrazer-driver-dkms-local-3.12.4.nagav3.1-9-any.pkg.tar.zst
+packaging/arch-local/python-openrazer-local-3.12.4.nagav3.1-9-any.pkg.tar.zst
 ```
 
 DKMS has the baseline driver installed for both current kernels. The on-disk
 and loaded `razermouse` module source versions both read:
 
 ```text
-36593E92584CB2992B29AAC
+665C13D879FF3501D395708
 ```
 
 The restored runtime state is:
@@ -82,12 +88,40 @@ The restored runtime state is:
 - `openrazer-daemon.service`: active
 - Dock and wireless Naga: both present through the Python client with their
   real serials
-- Polychromatic backend: stock `0.9.8-1` contents
+- Scroll mode: tactile mode `0`
+- Scroll mode options: `tactile`, `free_spin`, `precision_tactile`
+- Polychromatic backend: PR `#613` commit
+  `627f9850165775cb58ce513079df82509c2a4bb2`
 
-`pacman -Qkk polychromatic` reports only a modification-time mismatch for
-`openrazer.py` after the test file was replaced and the package reinstalled.
-The restored file's checksum matches the saved stock file; there is no content
-or size mismatch.
+`pacman -Qkk polychromatic` reports the expected modification-time, size, and
+checksum mismatches for the intentionally overridden `openrazer.py`. Its SHA256
+is `45c9fcc5122717d8787c82473cd6224bb45207f0e714e6e525e3f44a273eab24`,
+matching the tested PR commit exactly. The tracked restore patch is
+`packaging/polychromatic-local/polychromatic-0.9.8-scroll-mode-options.patch`.
+
+### Integrated capability validation
+
+The local integration adds only the finalized scroll-mode capability. It does
+not include the PR branch's command timeout, discovery, driver-mode, global DPI,
+or input mapping changes.
+
+- `getScrollModeOptions` returns the ordered mode names over D-Bus.
+- The Python client exposes the same values as `scroll_mode_options`.
+- Existing scroll-mode devices are version `1`; the Naga V3 Pro is version `2`.
+- Focused daemon and Python client tests passed, 10 tests total.
+- Python byte-compilation passed.
+- The driver built against `7.2.4-1-cachyos` with Clang and
+  `6.18.50-1-cachyos-lts` with GCC.
+- The complete daemon suite retained one unrelated legacy `effect_sync` test
+  failure; all 42 other tests passed.
+- DKMS installed the wake-retry fix for both kernels, and loaded/on-disk source
+  versions both read `665C13D879FF3501D395708`.
+- Live D-Bus and Python checks returned exactly the three Naga modes.
+- Polychromatic displayed three unique choices and physically applied mode `2`.
+- A sysfs-confirmed 60-second idle cycle reset mode to `0:0`; after wake, the
+  bounded fire-and-forget attempts restored mode `3:0` without polling or a
+  kernel warning. Separate input capture confirmed clean `KEY_F17` transitions
+  while driver mode was active.
 
 ## GitHub updates
 
@@ -246,14 +280,15 @@ The complete test result was posted at:
 
 ## Polychromatic PR 613
 
-### Exact version tested
+### Exact versions tested
 
 - Repository: `polychromatic/polychromatic`
 - Branch: `scroll_mode_options`
-- Commit: `ee4fbed9b29d109c5296cec7609c9ad5993978ed`
+- Initial commit: `ee4fbed9b29d109c5296cec7609c9ad5993978ed`
+- Corrected retest commit: `627f9850165775cb58ce513079df82509c2a4bb2`
 
 PR `#613` changes only `polychromatic/backends/openrazer.py`. Following the
-maintainer's test instructions, that exact file temporarily replaced
+maintainer's test instructions, each tested revision of that file replaced
 `/usr/lib/python3.14/site-packages/polychromatic/backends/openrazer.py` from
 Polychromatic `0.9.8-1`. It was tested with OpenRazer PR `#2904` active so the
 new D-Bus and Python capability existed.
@@ -303,6 +338,16 @@ The complete test result was posted at:
 
 - [Polychromatic PR 613 test comment](https://github.com/polychromatic/polychromatic/pull/613#issuecomment-5645847019)
 
+### Corrected retest and adoption
+
+The force-updated commit `627f9850` initializes the option list as empty and
+then appends only the modes reported by OpenRazer. Retesting showed exactly
+three unique entries. Precision Tactile applied mode `2` and produced the finer
+tactile wheel behavior. This corrected file was installed with the local
+`pkgrel=9` capability and wake-retry build and became the new baseline.
+
+- [Polychromatic PR 613 corrected retest](https://github.com/polychromatic/polychromatic/pull/613#issuecomment-5652349700)
+
 ## Restore procedure
 
 If a future branch test replaces the baseline packages, restore all three as a
@@ -310,9 +355,13 @@ single Pacman transaction:
 
 ```bash
 sudo pacman -U --noconfirm \
-  packaging/arch-local/openrazer-daemon-local-3.12.4.nagav3.1-7-any.pkg.tar.zst \
-  packaging/arch-local/openrazer-driver-dkms-local-3.12.4.nagav3.1-7-any.pkg.tar.zst \
-  packaging/arch-local/python-openrazer-local-3.12.4.nagav3.1-7-any.pkg.tar.zst
+  packaging/arch-local/openrazer-daemon-local-3.12.4.nagav3.1-9-any.pkg.tar.zst \
+  packaging/arch-local/openrazer-driver-dkms-local-3.12.4.nagav3.1-9-any.pkg.tar.zst \
+  packaging/arch-local/python-openrazer-local-3.12.4.nagav3.1-9-any.pkg.tar.zst
+sudo pacman -S --noconfirm polychromatic
+sudo patch --forward --strip=1 \
+  --directory=/usr/lib/python3.14/site-packages \
+  < packaging/polychromatic-local/polychromatic-0.9.8-scroll-mode-options.patch
 ```
 
 Stop applications using the driver, reload the packaged module, retrigger udev
@@ -331,8 +380,9 @@ systemctl --user is-active openrazer-daemon.service
 ```
 
 The on-disk and loaded source versions must both equal
-`36593E92584CB2992B29AAC`. Finally, verify mode `3:0`, idle `300`, the real
-wireless serial, and `KEY_F17` after an actual idle/wake cycle.
+`665C13D879FF3501D395708`. Finally, verify mode `3:0`, idle `300`, scroll mode
+`0`, all three `scroll_mode_options`, the real wireless serial, the three unique
+Polychromatic choices, and `KEY_F17` after an actual idle/wake cycle.
 
 Temporary test checkouts and packages were kept under `/tmp/opencode` during
 this session. They are disposable and must not be treated as restore artifacts.

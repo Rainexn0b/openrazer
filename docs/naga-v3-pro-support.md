@@ -290,7 +290,7 @@ separate daemon identity design change.
 | Scroll acceleration | Pass | Pass | Read/write and physical behavior pass; the setting was restored disabled. |
 | Smart Reel | Pass | Pass | Read/write and physical behavior pass; the setting was restored disabled. |
 | Buttons and wheel tilt | Pass | Pass | Both transports produce the mapping below with no duplicate wheel-tilt events. |
-| Desktop applications | Partial | Partial | Polychromatic controls work but its scroll-mode menu omits precision tactile mode `2`; Input Remapper detects and remaps the special inputs. |
+| Desktop applications | Pass | Pass | Polychromatic exposes three device-reported scroll modes, including precision tactile mode `2`; Input Remapper detects and remaps the special inputs. |
 | Suspend/resume and reconnect | Pass | Pass | Suspend/resume passes on both transports. Wireless hotplug, daemon startup, and driver-mode restoration after idle wake recover automatically. |
 
 The wired and wireless 12-button input mappings were captured from all three
@@ -322,21 +322,27 @@ scroll, and DPI controls, including a 50,000 DPI stage. Input Remapper detects
 the Naga's input interfaces, records the special F-key events such as `KEY_F17`,
 and applies remappings successfully.
 
-Polychromatic 0.9.8 only offers tactile mode `0` and free-spin mode `1` in its
-scroll-mode menu. Its OpenRazer backend hard-codes those two choices and the
-current OpenRazer D-Bus API does not expose a device-specific maximum scroll
-mode that clients can query. Precision tactile mode `2` still works physically
-when selected through the OpenRazer API. This downstream UI gap was also
-present with the original Naga V3 Pro pull request and requires a coordinated
-OpenRazer capability API and Polychromatic backend change for a generic fix.
+The local `pkgrel=9` OpenRazer packages expose `getScrollModeOptions` over
+D-Bus and `scroll_mode_options` through the Python client. The Naga V3 Pro
+reports tactile, free-spin, and precision tactile in the numeric order accepted
+by `setScrollMode`; older scroll-mode mice report only tactile and free-spin.
+Polychromatic 0.9.8 uses the corrected backend from upstream PR `#613`, commit
+`627f9850165775cb58ce513079df82509c2a4bb2`. Its selector displays exactly
+those three unique choices, and selecting Precision Tactile applies mode `2`
+with the expected finer physical detents. The packaged backend override can be
+reproduced with
+`packaging/polychromatic-local/polychromatic-0.9.8-scroll-mode-options.patch`.
 
 The wireless mouse resets from driver mode `3:0` to device mode `0:0` when its
 idle timer expires. In device mode the ring-finger button does not emit the
 keyboard report that the driver translates to `KEY_F17`. The mouse driver now
 remembers an explicit driver-mode request and reapplies it asynchronously after
-the first mouse report following a long idle period. A 60-second idle test
-confirmed that normal sleep still occurs, the wake report restores driver mode,
-and three subsequent ring-finger presses produce clean `KEY_F17` transitions.
+the first mouse report following a long idle period. Because a successful
+fire-and-forget USB transfer cannot confirm that the waking firmware applied
+the command, the wake job completes three bounded attempts without polling. A
+60-second idle test confirmed that normal sleep still occurs, mode resets to
+`0:0`, and the wake-triggered attempts restore mode `3:0`. Separate input
+captures confirmed clean `KEY_F17` transitions while mode `3:0` is active.
 
 The initial 50,000 DPI boundary test exposed a shared driver clamp at 45,000.
 The device-aware fix in `pkgrel=5` preserves the existing 45,000 cap for other
