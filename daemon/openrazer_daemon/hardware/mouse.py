@@ -5,6 +5,7 @@ Mouse class
 """
 import re
 from openrazer_daemon.hardware.device_base import RazerDeviceBrightnessSuspend as __RazerDeviceBrightnessSuspend, RazerDevice as __RazerDevice
+from openrazer_daemon.misc import mouse_monitor
 
 
 class RazerViperMini(__RazerDevice):
@@ -1047,7 +1048,8 @@ class RazerNagaV3ProWired(RazerNagaV2ProWired):
     """
     Class for the Razer Naga V3 Pro (Wired)
     """
-    EVENT_FILE_REGEX = re.compile(r'.*Razer_Naga_V3_Pro_.*-if0(1|2)-event-kbd')
+    # EVENT_FILE_REGEX = re.compile(r'.*Razer_Naga_V3_Pro_.*-if0(1|2)-event-kbd')
+    EVENT_FILE_REGEX = re.compile(r'.*Razer_Naga_V3_Pro_.*-(if0(1|2)-event-kbd|event-mouse)')
     USB_PID = 0x00E7
     DPI_MAX = 50000
     DRIVER_MODE = True
@@ -1057,12 +1059,29 @@ class RazerNagaV3ProWired(RazerNagaV2ProWired):
                                              'get_scroll_brightness', 'set_scroll_brightness', 'set_scroll_wave', 'set_scroll_static', 'set_scroll_spectrum',
                                              'set_scroll_none', 'set_scroll_reactive', 'set_scroll_breath_random', 'set_scroll_breath_single', 'set_scroll_breath_dual']
 
-
 class RazerNagaV3ProWireless(RazerNagaV3ProWired):
     """
     Class for the Razer Naga V3 Pro (Wireless)
     """
     USB_PID = 0x00E8
+
+    def __init__(self, *args, **kwargs):
+        # Wireless devices go idle and stop responding to USB control transfers,
+        # so wait for the first input event before doing any hardware I/O.
+        # Otherwise it raises a TimeoutError.
+        event_files = mouse_monitor.find_event_files(kwargs.get('device_path'), self.EVENT_FILE_REGEX, kwargs.get('testing', False))
+        mouse_monitor.wait_for_activity(event_files, self.__class__.__name__)
+
+        super().__init__(*args, **kwargs)
+
+        self._mouse_monitor = mouse_monitor.MouseMonitor(kwargs.get('device_number'), self.event_files, self)
+        self._mouse_monitor.start()
+
+    def _close(self):
+        self._mouse_monitor.shutdown = True
+        self._mouse_monitor.join()
+
+        super()._close()
 
 
 class RazerDeathAdder1800(__RazerDevice):
