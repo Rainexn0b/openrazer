@@ -1066,15 +1066,13 @@ class RazerNagaV3ProWireless(RazerNagaV3ProWired):
     USB_PID = 0x00E8
 
     def __init__(self, *args, **kwargs):
-        # Wireless devices go idle and stop responding to USB control transfers,
-        # so wait for the first input event before doing any hardware I/O.
+        # Wait for the first input event before doing any hardware I/O.
         # Otherwise it raises a TimeoutError.
-        event_files = mouse_monitor.find_event_files(kwargs.get('device_path'), self.EVENT_FILE_REGEX, kwargs.get('testing', False))
-        mouse_monitor.wait_for_activity(event_files, self.__class__.__name__)
+        mouse_monitor.wait_for_activity(kwargs.get('device_path'), self.__class__.__name__)
 
         super().__init__(*args, **kwargs)
 
-        self._mouse_monitor = mouse_monitor.MouseMonitor(kwargs.get('device_number'), self.event_files, self)
+        self._mouse_monitor = mouse_monitor.MouseMonitor(kwargs.get('device_number'), self)
         self._mouse_monitor.start()
 
     def _close(self):
