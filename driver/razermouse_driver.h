@@ -150,6 +150,9 @@ struct razer_mouse_device {
     u8 button_byte; // Previous value of mouse button byte in HID record
     u8 rep4[16]; // Previous value of report 4 on the keyboard intf
 
+    unsigned long last_activity; // jiffies at the last input report caused by the user
+    bool last_activity_valid; // False until the first such activity is seen
+
     unsigned char usb_interface_protocol;
     unsigned char usb_interface_subclass;
 

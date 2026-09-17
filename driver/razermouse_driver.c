@@ -7,6 +7,7 @@
 #include <linux/slab.h>
 #include <linux/module.h>
 #include <linux/init.h>
+#include <linux/jiffies.h>
 #include <linux/usb/input.h>
 #include <linux/hid.h>
 #include <linux/hrtimer.h>
@@ -3415,6 +3416,28 @@ static ssize_t razer_attr_read_dpi_stages(struct device *dev, struct device_attr
 }
 
 /**
+ * Read device file "device_last_activity"
+ *
+ * Gets the time since the last input report caused by the user, as a number
+ * of milliseconds, or -1 if no such report has been seen since the device was
+ * bound.
+ */
+static ssize_t razer_attr_read_device_last_activity(struct device *dev, struct device_attribute *attr, char *buf)
+{
+    struct razer_mouse_device *device = dev_get_drvdata(dev);
+    unsigned long last_activity;
+
+    /* Pairs with the smp_store_release() in razer_note_activity(): if the flag
+     * is set, the timestamp stored before it is visible here as well. */
+    if (!smp_load_acquire(&device->last_activity_valid))
+        return sysfs_emit(buf, "-1\n");
+
+    last_activity = READ_ONCE(device->last_activity);
+
+    return sysfs_emit(buf, "%u\n", jiffies_to_msecs(jiffies - last_activity));
+}
+
+/**
  * Read device file "device_idle_time"
  *
  * Gets the time this device will go into powersave as a number of seconds.
@@ -5914,6 +5937,7 @@ static DEVICE_ATTR(device_type,               0440, razer_attr_read_device_type,
 static DEVICE_ATTR(device_mode,               0660, razer_attr_read_device_mode,           razer_attr_write_device_mode);
 static DEVICE_ATTR(device_serial,             0440, razer_attr_read_device_serial,         NULL);
 static DEVICE_ATTR(device_idle_time,          0660, razer_attr_read_device_idle_time,      razer_attr_write_device_idle_time);
+static DEVICE_ATTR(device_last_activity,      0440, razer_attr_read_device_last_activity,  NULL);
 
 static DEVICE_ATTR(scroll_mode,               0660, razer_attr_read_scroll_mode,           razer_attr_write_scroll_mode);
 static DEVICE_ATTR(scroll_acceleration,       0660, razer_attr_read_scroll_acceleration,   razer_attr_write_scroll_acceleration);
@@ -6172,6 +6196,46 @@ static struct razer_mouse_device *find_mouse(struct hid_device *hdev)
 }
 
 /**
+ * Checks if an input report was caused by the user
+ *
+ * The receiver keeps sending reports while the mouse sits idle, so the report
+ * has to be looked at to tell real input apart from that chatter.
+ */
+static bool razer_report_has_input(struct hid_report *report, unsigned char protocol, u8 *data, int size)
+{
+    if (protocol != USB_INTERFACE_PROTOCOL_MOUSE && protocol != USB_INTERFACE_PROTOCOL_KEYBOARD)
+        return false;
+
+    if (report->id) {
+        data++;
+        size--;
+    }
+
+    return size > 0 && memchr_inv(data, 0, size) != NULL;
+}
+
+/**
+ * Timestamp the last input report caused by the user
+ *
+ * The device files live on the mouse interface, so reports seen on the
+ * keyboard interfaces are recorded on the mouse device as well.
+ */
+static void razer_note_activity(struct hid_device *hdev, struct razer_mouse_device *rdev, struct hid_report *report, unsigned char protocol, u8 *data, int size)
+{
+    if (!razer_report_has_input(report, protocol, data, size))
+        return;
+
+    if (protocol != USB_INTERFACE_PROTOCOL_MOUSE) {
+        rdev = find_mouse(hdev);
+        if (!rdev)
+            return;
+    }
+
+    WRITE_ONCE(rdev->last_activity, jiffies);
+    smp_store_release(&rdev->last_activity_valid, true);
+}
+
+/**
  * Test if a bit is cleared in 'prev' and set in 'cur'
  */
 static int rising_bit(u8 prev, u8 cur, u8 mask)
@@ -6278,6 +6342,8 @@ static int razer_raw_event(struct hid_device *hdev, struct hid_report *report, u
         break;
     case USB_DEVICE_ID_RAZER_NAGA_V3_PRO_WIRED:
     case USB_DEVICE_ID_RAZER_NAGA_V3_PRO_WIRELESS:
+        razer_note_activity(hdev, rdev, report, intf->cur_altsetting->desc.bInterfaceProtocol, data, size);
+
         /* Detect wheel tilt edges
          * tilting produces data[0] 0x00->0x20->0x00 (left) or
          * 0x00->0x40->0x00 (right), nothing else changes. Map that straight
@@ -7254,6 +7320,7 @@ static int razer_mouse_probe(struct hid_device *hdev, const struct hid_device_id
             CREATE_DEVICE_FILE(&hdev->dev, &dev_attr_charge_status);
             CREATE_DEVICE_FILE(&hdev->dev, &dev_attr_charge_low_threshold);
             CREATE_DEVICE_FILE(&hdev->dev, &dev_attr_device_idle_time);
+            CREATE_DEVICE_FILE(&hdev->dev, &dev_attr_device_last_activity);
 
             CREATE_DEVICE_FILE(&hdev->dev, &dev_attr_logo_led_brightness);
             CREATE_DEVICE_FILE(&hdev->dev, &dev_attr_logo_matrix_effect_wave);
