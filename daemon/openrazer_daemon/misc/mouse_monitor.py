@@ -160,7 +160,6 @@ class MouseMonitor(threading.Thread):
             if activity and self._idle:
                 self._idle = False
                 self._pending_driver_mode = self._parent.DRIVER_MODE
-                self._logger.info("%s woke up from idle state", device_name)
 
             if self._pending_driver_mode:
                 self._apply_driver_mode()
