@@ -62,7 +62,6 @@ def wait_for_activity(device_path, device_name):
     logger = logging.getLogger('razer.misc.mousemonitor')
     last_activity_path = os.path.join(device_path, 'device_last_activity')
 
-
     logged_idle = False
     while True:
         last_activity = _read_last_activity(last_activity_path)
