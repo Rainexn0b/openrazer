@@ -7,18 +7,25 @@ Some wireless mice (e.g. the Naga V3 Pro) stop responding to USB control
 transfers while idle, so any hardware write attempted during that time (like
 setting "driver mode") raises a TimeoutError.
 
+Right after waking up, the receiver can also answer commands with an empty
+"busy" response for a while. The driver reports those as success, so reads
+return empty data (e.g. an empty serial number) and writes are silently
+dropped.
+
 Activity is read from the driver's "device_last_activity" file, which reports
 how long ago the kernel driver last saw an input report from the mouse.
 This module is used for:
 
-* Block device initialisation until the mouse produces its first input report,
-  so the driver doesn't try to talk to a sleeping device.
+* Block device initialisation until the mouse is in use and answers control
+  transfers with real data, so the driver doesn't try to talk to a sleeping
+  device.
 * Watch for the mouse waking up from its own idle state at runtime and
   re-apply "driver mode", since some devices silently drop back to "device
   mode" while idle.
 """
 import logging
 import os
+import re
 import threading
 import time
 
@@ -45,30 +52,63 @@ def _read_last_activity(last_activity_path):
         return NO_ACTIVITY
 
 
-def wait_for_activity(device_path, device_name):
+def _is_device_serial_ready(device_path):
     """
-    Block until the mouse has reported at least one input event.
+    Check whether the device answers control transfers with real data.
 
-    Logs once that the device is idle, and returns as soon as the driver has
-    seen an input report. Returns immediately if the driver doesn't expose
-    "device_last_activity".
+    A "busy" response from the receiver carries no data, so reading the serial
+    number tells it apart from a real answer.
 
     :param device_path: Device path
     :type device_path: str
 
-    :param device_name: Device name, used for the idle log message
+    :return: True if the device returned a valid serial number
+    :rtype: bool
+    """
+    try:
+        with open(os.path.join(device_path, 'device_serial'), 'r') as driver_file:
+            serial = driver_file.read().strip()
+    except (OSError, UnicodeDecodeError):
+        return False
+
+    return re.fullmatch(r"[\dA-Z]+", serial) is not None
+
+
+def wait_until_ready(device_path, device_name):
+    """
+    Block until the mouse is awake and answers control transfers.
+
+    Logs once that the device is idle. Once the driver has seen a recent input
+    report, polls the device until it answers with real data, giving up after
+    READY_TIMEOUT seconds of being awake so a device that never returns a
+    valid serial number still gets initialised.
+
+    :param device_path: Device path
+    :type device_path: str
+
+    :param device_name: Device name, used for the log messages
     :type device_name: str
     """
     logger = logging.getLogger('razer.misc.mousemonitor')
     last_activity_path = os.path.join(device_path, 'device_last_activity')
 
+    awake_window = 5000
     logged_idle = False
+    deadline_timeout = 10.0
+    deadline = None
     while True:
         last_activity = _read_last_activity(last_activity_path)
-        if last_activity != NO_ACTIVITY:
-            return
+        if last_activity != NO_ACTIVITY and last_activity < awake_window:
+            if _is_device_serial_ready(device_path):
+                return
 
-        if not logged_idle:
+            if deadline is None:
+                deadline = time.monotonic() + deadline_timeout
+            elif time.monotonic() >= deadline:
+                logger.warning("%s is not answering control transfers, initialising anyway", device_name)
+                return
+
+        elif not logged_idle:
             logger.info("%s in idle state", device_name)
             logged_idle = True
 
