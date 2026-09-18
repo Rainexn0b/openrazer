@@ -1069,7 +1069,7 @@ class RazerNagaV3ProWireless(RazerNagaV3ProWired):
     def __init__(self, *args, **kwargs):
         # Wait for the first input event before doing any hardware I/O.
         # Otherwise it raises a TimeoutError.
-        mouse_monitor.wait_for_activity(kwargs.get('device_path'), self.__class__.__name__)
+        mouse_monitor.wait_until_ready(kwargs.get('device_path'), self.__class__.__name__)
 
         super().__init__(*args, **kwargs)
 
