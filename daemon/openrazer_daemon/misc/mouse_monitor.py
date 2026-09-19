@@ -14,14 +14,9 @@ dropped.
 
 Activity is read from the driver's "device_last_activity" file, which reports
 how long ago the kernel driver last saw an input report from the mouse.
-This module is used for:
-
-* Block device initialisation until the mouse is in use and answers control
-  transfers with real data, so the driver doesn't try to talk to a sleeping
-  device.
-* Watch for the mouse waking up from its own idle state at runtime and
-  re-apply "driver mode", since some devices silently drop back to "device
-  mode" while idle.
+This module provides a one-shot readiness check for asynchronous device
+discovery and watches for the mouse waking at runtime so it can re-apply
+"driver mode". Some devices silently drop back to "device mode" while idle.
 """
 import logging
 import os
@@ -52,7 +47,7 @@ def _read_last_activity(last_activity_path):
         return NO_ACTIVITY
 
 
-def _is_device_serial_ready(device_path):
+def is_device_serial_ready(device_path):
     """
     Check whether the device answers control transfers with real data.
 
@@ -72,47 +67,6 @@ def _is_device_serial_ready(device_path):
         return False
 
     return re.fullmatch(r"[\dA-Z]+", serial) is not None
-
-
-def wait_until_ready(device_path, device_name):
-    """
-    Block until the mouse is awake and answers control transfers.
-
-    Logs once that the device is idle. Once the driver has seen a recent input
-    report, polls the device until it answers with real data, giving up after
-    READY_TIMEOUT seconds of being awake so a device that never returns a
-    valid serial number still gets initialised.
-
-    :param device_path: Device path
-    :type device_path: str
-
-    :param device_name: Device name, used for the log messages
-    :type device_name: str
-    """
-    logger = logging.getLogger('razer.misc.mousemonitor')
-    last_activity_path = os.path.join(device_path, 'device_last_activity')
-
-    awake_window = 5000
-    logged_idle = False
-    deadline_timeout = 10.0
-    deadline = None
-    while True:
-        last_activity = _read_last_activity(last_activity_path)
-        if last_activity != NO_ACTIVITY and last_activity < awake_window:
-            if _is_device_serial_ready(device_path):
-                return
-
-            if deadline is None:
-                deadline = time.monotonic() + deadline_timeout
-            elif time.monotonic() >= deadline:
-                logger.warning("%s is not answering control transfers, initialising anyway", device_name)
-                return
-
-        elif not logged_idle:
-            logger.info("%s in idle state", device_name)
-            logged_idle = True
-
-        time.sleep(POLL_INTERVAL)
 
 
 class MouseMonitor(threading.Thread):

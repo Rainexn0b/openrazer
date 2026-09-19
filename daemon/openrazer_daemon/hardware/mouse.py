@@ -3,8 +3,13 @@
 """
 Mouse class
 """
+import errno
 import re
-from openrazer_daemon.hardware.device_base import RazerDeviceBrightnessSuspend as __RazerDeviceBrightnessSuspend, RazerDevice as __RazerDevice
+from openrazer_daemon.hardware.device_base import (
+    DeviceNotReadyError as _DeviceNotReadyError,
+    RazerDevice as __RazerDevice,
+    RazerDeviceBrightnessSuspend as __RazerDeviceBrightnessSuspend,
+)
 from openrazer_daemon.misc import mouse_monitor
 
 
@@ -1067,6 +1072,10 @@ class RazerNagaV3ProWireless(RazerNagaV3ProWired):
     USB_PID = 0x00E8
 
     def __init__(self, *args, **kwargs):
+        self._is_closed = True
+        if not mouse_monitor.is_device_serial_ready(kwargs.get('device_path')):
+            raise _DeviceNotReadyError(errno.EAGAIN, 'Device serial is not ready')
+
         super().__init__(*args, **kwargs)
 
         self._mouse_monitor = mouse_monitor.MouseMonitor(kwargs.get('device_number'), self)

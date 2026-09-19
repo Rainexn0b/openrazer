@@ -8,9 +8,11 @@ import types
 import unittest
 import unittest.mock
 
+import openrazer_daemon.hardware
 from openrazer_daemon.daemon import RazerDaemon
 from openrazer_daemon.device import DeviceCollection
 from openrazer_daemon.hardware.device_base import DeviceNotReadyError, RazerDevice
+from openrazer_daemon.hardware.mouse import RazerNagaV3ProWireless
 
 
 class DriverModeDevice(RazerDevice):
@@ -77,14 +79,45 @@ class DaemonHotplugTest(unittest.TestCase):
 
     @unittest.mock.patch('openrazer_daemon.daemon.time.sleep')
     @unittest.mock.patch('openrazer_daemon.daemon.threading.Timer')
-    def test_add_device_stops_after_retry_limit(self, timer_class, _sleep):
+    def test_add_device_switches_to_slow_retry(self, timer_class, _sleep):
         self.device_class.side_effect = DeviceNotReadyError(110, 'Connection timed out')
 
         self.daemon._add_device(self.device, retry_count=15)
 
-        timer_class.assert_not_called()
-        self.daemon.logger.error.assert_called_once()
+        timer_class.assert_called_once_with(30, self.daemon._retry_add_device,
+                                            args=(self.device, 16, None, unittest.mock.ANY))
+        timer_class.return_value.start.assert_called_once_with()
+        self.assertTrue(timer_class.return_value.daemon)
+        self.daemon.logger.warning.assert_called_once()
         self.assertEqual(len(self.daemon._razer_devices), 0)
+
+    @unittest.mock.patch('openrazer_daemon.daemon.time.sleep')
+    @unittest.mock.patch('openrazer_daemon.daemon.threading.Timer')
+    def test_remove_device_cancels_slow_retry(self, timer_class, _sleep):
+        self.device_class.side_effect = DeviceNotReadyError(110, 'Connection timed out')
+
+        self.daemon._add_device(self.device, retry_count=15)
+        self.daemon._remove_device(self.device)
+
+        timer_class.return_value.cancel.assert_called_once_with()
+        self.assertEqual(self.daemon._pending_device_retries, {})
+
+    @unittest.mock.patch('openrazer_daemon.daemon.os.path.exists', return_value=True)
+    @unittest.mock.patch('openrazer_daemon.daemon.time.sleep')
+    @unittest.mock.patch('openrazer_daemon.daemon.threading.Timer')
+    def test_slow_retry_adds_device_after_late_wake(self, timer_class, _sleep, _exists):
+        razer_device = unittest.mock.MagicMock()
+        razer_device.get_serial.return_value = 'SERIAL123'
+        self.device_class.side_effect = [DeviceNotReadyError(110, 'Connection timed out'), razer_device]
+
+        self.daemon._add_device(self.device, retry_count=15)
+        retry_callback = timer_class.call_args.args[1]
+        retry_args = timer_class.call_args.kwargs['args']
+        retry_callback(*retry_args)
+
+        self.assertEqual(self.daemon._razer_devices.serials(), ['SERIAL123'])
+        self.assertEqual(self.daemon._pending_device_retries, {})
+        self.daemon.device_added.assert_called_once_with()
 
     @unittest.mock.patch('openrazer_daemon.daemon.time.sleep')
     @unittest.mock.patch('openrazer_daemon.daemon.threading.Timer')
@@ -206,6 +239,19 @@ class DaemonHotplugTest(unittest.TestCase):
 
 
 class DeviceConstructionTest(unittest.TestCase):
+    def test_hardware_discovery_ignores_readiness_exception(self):
+        self.assertNotIn(DeviceNotReadyError, openrazer_daemon.hardware.get_device_classes())
+
+    @unittest.mock.patch('openrazer_daemon.hardware.mouse.mouse_monitor.is_device_serial_ready', return_value=False)
+    def test_wireless_naga_requires_valid_serial(self, is_device_serial_ready):
+        device = object.__new__(RazerNagaV3ProWireless)
+
+        with self.assertRaisesRegex(DeviceNotReadyError, 'Device serial is not ready'):
+            RazerNagaV3ProWireless.__init__(device, device_path='/sys/devices/naga')
+
+        self.assertTrue(device._is_closed)
+        is_device_serial_ready.assert_called_once_with('/sys/devices/naga')
+
     @unittest.mock.patch('openrazer_daemon.hardware.device_base.effect_sync.EffectSync')
     def test_driver_mode_timeout_precedes_background_services(self, effect_sync):
         config = configparser.ConfigParser()
