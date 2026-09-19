@@ -19,6 +19,10 @@ from openrazer_daemon.misc import effect_sync
 from openrazer_daemon.misc.battery_notifier import BatteryManager as _BatteryManager
 
 
+class DeviceNotReadyError(OSError):
+    """Raised when a device is present but not accepting commands yet."""
+
+
 # pylint: disable=too-many-instance-attributes
 # pylint: disable=E1102
 # See https://github.com/PyCQA/pylint/issues/1493
@@ -71,6 +75,7 @@ class RazerDevice(DBusService):
         if additional_interfaces is not None:
             self.additional_interfaces.extend(additional_interfaces)
         self._battery_manager = None
+        self._is_closed = True
 
         self.config = config
         self.persistence = persistence
@@ -118,6 +123,22 @@ class RazerDevice(DBusService):
 
         if 'set_scroll_mode' in self.METHODS and not self.SCROLL_MODE_VERSION:
             self.SCROLL_MODE_VERSION = 1
+
+        try:
+            driver_mode_default = self.DRIVER_MODE
+            self.DRIVER_MODE = self.config.getboolean(f"Device:{self.serial}", "driver_mode")
+            self.logger.info('Overriding DRIVER_MODE with "%s" from config (default: "%s")', self.DRIVER_MODE, driver_mode_default)
+        except (configparser.NoSectionError, configparser.NoOptionError):
+            pass
+
+        # Check readiness before starting background services or registering a
+        # D-Bus object, so the daemon can retry unavailable wireless devices.
+        if self.DRIVER_MODE:
+            self.logger.info('Setting device to "driver" mode. Daemon will handle special functionality')
+            try:
+                self.set_device_mode(0x03, 0x00)  # Driver mode
+            except OSError as err:
+                raise DeviceNotReadyError(*err.args) from err
 
         self._effect_sync = effect_sync.EffectSync(self, device_number)
 
@@ -327,17 +348,6 @@ class RazerDevice(DBusService):
         # Initialize battery manager if the device has support
         if 'get_battery' in self.METHODS:
             self._init_battery_manager()
-
-        try:
-            driver_mode_default = self.DRIVER_MODE
-            self.DRIVER_MODE = self.config.getboolean(f"Device:{self.serial}", "driver_mode")
-            self.logger.info('Overriding DRIVER_MODE with "%s" from config (default: "%s")', self.DRIVER_MODE, driver_mode_default)
-        except (configparser.NoSectionError, configparser.NoOptionError):
-            pass
-
-        if self.DRIVER_MODE:
-            self.logger.info('Setting device to "driver" mode. Daemon will handle special functionality')
-            self.set_device_mode(0x03, 0x00)  # Driver mode
 
         self.restore_dpi_poll_rate()
         self.restore_brightness()
@@ -1222,18 +1232,22 @@ class RazerDevice(DBusService):
             if 'get_dpi_xy' in self.METHODS:
                 dpi_func = getattr(self, "getDPI", None)
                 if dpi_func is not None:
-                    self.dpi = dpi_func()
+                    try:
+                        self.dpi = dpi_func()
+                    except OSError as err:
+                        self.logger.warning("Could not read DPI while closing: %s", err)
 
             if self.DRIVER_MODE:
                 # Set back to device mode
                 try:
                     self.set_device_mode(0x00, 0x00)  # Device mode
-                except FileNotFoundError:
-                    pass
+                except OSError as err:
+                    self.logger.warning("Could not set device mode while closing: %s", err)
 
-            self._close()
-
-            self._is_closed = True
+            try:
+                self._close()
+            finally:
+                self._is_closed = True
 
     def register_observer(self, observer):
         """

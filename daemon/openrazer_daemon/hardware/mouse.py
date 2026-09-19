@@ -1067,10 +1067,6 @@ class RazerNagaV3ProWireless(RazerNagaV3ProWired):
     USB_PID = 0x00E8
 
     def __init__(self, *args, **kwargs):
-        # Wait for the first input event before doing any hardware I/O.
-        # Otherwise it raises a TimeoutError.
-        mouse_monitor.wait_until_ready(kwargs.get('device_path'), self.__class__.__name__)
-
         super().__init__(*args, **kwargs)
 
         self._mouse_monitor = mouse_monitor.MouseMonitor(kwargs.get('device_number'), self)

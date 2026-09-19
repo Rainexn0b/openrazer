@@ -25,6 +25,7 @@ import json
 import threading
 
 import openrazer_daemon.hardware
+from openrazer_daemon.hardware.device_base import DeviceNotReadyError
 from openrazer_daemon.dbus_services.service import DBusService
 from openrazer_daemon.device import DeviceCollection
 from openrazer_daemon.misc.screensaver_monitor import ScreensaverMonitor
@@ -117,7 +118,12 @@ class RazerDaemon(DBusService):
         self._init_screensaver_monitor()
 
         self._razer_devices = DeviceCollection()
-        self._load_devices(first_run=True)
+        self._pending_device_retries = {}
+        self._device_lock = threading.RLock()
+        self._udev_collection_lock = threading.Lock()
+        self._stopping = False
+        with self._device_lock:
+            self._load_devices(first_run=True)
 
         # Add DBus methods
         methods = {
@@ -492,11 +498,18 @@ class RazerDaemon(DBusService):
                         self.logger.critical("Could not access {0}/device_type, file is not owned by plugdev".format(sys_path))
                         break
 
-                    razer_device = device_class(device_path=sys_path, device_number=device_number, config=self._config,
-                                                persistence=self._persistence, testing=self._test_dir is not None,
-                                                additional_interfaces=sorted(additional_interfaces),
-                                                additional_methods=[],
-                                                unknown_serial_counter=self._unknown_serial_counter)
+                    try:
+                        razer_device = device_class(device_path=sys_path, device_number=device_number, config=self._config,
+                                                    persistence=self._persistence, testing=self._test_dir is not None,
+                                                    additional_interfaces=sorted(additional_interfaces),
+                                                    additional_methods=[],
+                                                    unknown_serial_counter=self._unknown_serial_counter)
+                    except DeviceNotReadyError as err:
+                        if test_mode:
+                            raise
+
+                        self._schedule_device_retry(device, 0, sorted(additional_interfaces), err)
+                        continue
 
                     # Wireless devices sometimes don't listen
                     count = 0
@@ -515,13 +528,55 @@ class RazerDaemon(DBusService):
 
                     device_number += 1
 
-    def _add_device(self, device):
+    def _schedule_device_retry(self, device, retry_count, additional_interfaces, err):
+        with self._device_lock:
+            sys_name = device.sys_name
+            if self._stopping:
+                return
+
+            if retry_count >= 15:
+                self.logger.error("Could not add device %s after 15 retries: %s", sys_name, err)
+                return
+
+            if sys_name in self._pending_device_retries:
+                return
+
+            self.logger.warning("Device %s is not ready: %s. Retrying in 2 seconds (%d/15)",
+                                sys_name, err, retry_count + 1)
+            retry_token = object()
+            retry = threading.Timer(2, self._retry_add_device,
+                                    args=(device, retry_count + 1, additional_interfaces, retry_token))
+            retry.daemon = True
+            self._pending_device_retries[sys_name] = (retry_token, retry)
+            retry.start()
+
+    def _retry_add_device(self, device, retry_count, additional_interfaces, retry_token):
+        with self._device_lock:
+            pending_retry = self._pending_device_retries.get(device.sys_name)
+            if pending_retry is None or pending_retry[0] is not retry_token:
+                return
+            del self._pending_device_retries[device.sys_name]
+
+            if not self._stopping and os.path.exists(device.sys_path):
+                self._add_device(device, retry_count, additional_interfaces)
+
+    def _add_device(self, device, retry_count=0, additional_interfaces=None):
         """
         Add device event from udev
 
         :param device: Udev Device
         :type device: pyudev.device._device.Device
+        :param retry_count: Number of previous attempts to add this device
+        :type retry_count: int
+        :param additional_interfaces: Additional USB interface paths for this device
+        :type additional_interfaces: list[str] | None
         """
+        with self._device_lock:
+            if self._stopping or device.sys_name in self._pending_device_retries:
+                return
+            self._add_device_unlocked(device, retry_count, additional_interfaces)
+
+    def _add_device_unlocked(self, device, retry_count, additional_interfaces):
         device_number = len(self._razer_devices)
         for device_class in self._device_classes:
             sys_name = device.sys_name
@@ -532,13 +587,17 @@ class RazerDaemon(DBusService):
 
             if device_class.match(sys_name, sys_path):  # Check it matches sys/ ID format and has device_type file
                 self.logger.info('Found valid device.%d: %s', device_number, sys_name)
-                razer_device = device_class(device_path=sys_path, device_number=device_number, config=self._config,
-                                            persistence=self._persistence, testing=self._test_dir is not None,
-                                            additional_interfaces=None, additional_methods=[],
-                                            unknown_serial_counter=self._unknown_serial_counter)
-
                 # Its a udev event so currently the device hasn't been chmodded yet
                 time.sleep(0.2)
+
+                try:
+                    razer_device = device_class(device_path=sys_path, device_number=device_number, config=self._config,
+                                                persistence=self._persistence, testing=self._test_dir is not None,
+                                                additional_interfaces=additional_interfaces, additional_methods=[],
+                                                unknown_serial_counter=self._unknown_serial_counter)
+                except DeviceNotReadyError as err:
+                    self._schedule_device_retry(device, retry_count, additional_interfaces, err)
+                    return
 
                 # Wireless devices sometimes don't listen
                 device_serial = razer_device.get_serial()
@@ -565,7 +624,16 @@ class RazerDaemon(DBusService):
         :param device: Udev Device
         :type device: pyudev.device._device.Device
         """
+        with self._device_lock:
+            if self._stopping:
+                return
+            self._remove_device_unlocked(device)
+
+    def _remove_device_unlocked(self, device):
         device_id = device.sys_name
+        pending_retry = self._pending_device_retries.pop(device_id, None)
+        if pending_retry is not None:
+            pending_retry[1].cancel()
 
         try:
             device = self._razer_devices[device_id]
@@ -592,10 +660,11 @@ class RazerDaemon(DBusService):
         """
         self.logger.debug('Device event [%s]: %s', device.action, device.device_path)
         if device.action == 'add':
-            if self._collecting_udev:
-                self._collecting_udev_devices.append(device)
-                return
-            else:
+            with self._udev_collection_lock:
+                if self._collecting_udev:
+                    self._collecting_udev_devices.append(device)
+                    return
+
                 self._collecting_udev_devices = [device]
                 self._collecting_udev = True
                 t = threading.Thread(target=self._collecting_udev_method, args=(device,))
@@ -605,11 +674,21 @@ class RazerDaemon(DBusService):
 
     def _collecting_udev_method(self, device):
         time.sleep(2)  # delay to let udev add all devices that we want
+        with self._udev_collection_lock:
+            devices = self._collecting_udev_devices
+            self._collecting_udev_devices = []
+            self._collecting_udev = False
+
         # Sort the devices
-        self._collecting_udev_devices.sort(key=lambda x: x.sys_path, reverse=True)
-        for d in self._collecting_udev_devices:
-            self._add_device(d)
-        self._collecting_udev = False
+        devices.sort(key=lambda x: x.sys_path, reverse=True)
+        for d in devices:
+            if not os.path.exists(d.sys_path):
+                continue
+
+            device_match = d.sys_name.split('.')[0]
+            additional_interfaces = sorted(alt.sys_path for alt in devices
+                                           if device_match in alt.sys_name and alt.sys_name != d.sys_name)
+            self._add_device(d, additional_interfaces=additional_interfaces)
 
     def run(self):
         """
@@ -642,9 +721,20 @@ class RazerDaemon(DBusService):
         else:
             self.logger.info('Stopping daemon on signal %d', signum)
 
+        with self._device_lock:
+            self._stopping = True
+            retries = [pending_retry[1] for pending_retry in self._pending_device_retries.values()]
+            self._pending_device_retries.clear()
+
+        for retry in retries:
+            retry.cancel()
+
         # "Resume" all devices, in case they're still "suspended"
         # (lights off because of screensaver)
-        self.resume_devices()
+        try:
+            self.resume_devices()
+        except OSError as err:
+            self.logger.warning("Could not resume all devices while stopping: %s", err)
 
         self._main_loop.quit()
 
@@ -652,7 +742,10 @@ class RazerDaemon(DBusService):
         self._udev_observer.send_stop()
 
         for device in self._razer_devices:
-            device.dbus.close()
+            try:
+                device.dbus.close()
+            except OSError as err:
+                self.logger.warning("Could not close a device while stopping: %s", err)
 
         # Write config
         self.write_persistence(self._persistence_file)
