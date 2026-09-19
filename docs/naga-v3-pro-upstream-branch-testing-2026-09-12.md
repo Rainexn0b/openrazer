@@ -337,6 +337,41 @@ The baseline serves available devices immediately, retries the unavailable
 Naga separately, and stops retrying after a bounded window. The updated PR was
 therefore not adopted despite its successful runtime idle/wake cycle.
 
+### Recommended follow-up fixes
+
+The following changes should address the observed failures without requiring a
+full redesign:
+
+1. Do not block device construction in `RazerNagaV3ProWireless.__init__()`.
+   Convert an unavailable or sleeping device into `DeviceNotReadyError`, then
+   let the daemon serve available devices and retry the Naga asynchronously
+   with a bounded retry window. The existing baseline implementation in
+   `77a12fac` is a reference for this behavior; `85d3d844` packages it.
+2. Make shutdown tolerant of sleeping hardware. Handle `OSError` and
+   `TimeoutError` per device while resuming or closing, continue stopping the
+   main loop and udev observer, and always stop the mouse-monitor thread. A
+   daemon shutdown should not depend on a successful control transfer to an
+   unavailable mouse.
+3. Correct the activity signal used for wake detection. The current heuristic
+   treats a non-zero report as user input, and the observed sleep-transition
+   report reset `device_last_activity`. Filter receiver/status reports or use a
+   kernel-side long-idle wake transition so the first real mouse report after
+   sleep is recognized promptly. The baseline wake restoration in `09a922ce`
+   and `1a250c1c` is a reference.
+4. Do not treat one successful mode write as proof that firmware applied it.
+   The receiver can silently drop the first post-wake command. Use a small,
+   bounded sequence of delayed driver-mode writes after the first wake report;
+   do not replace this with an unbounded polling loop. A reliable readback can
+   supplement the retries where the device supports it.
+5. Add regression tests for startup with the mouse asleep, daemon shutdown
+   while it is asleep, immediate wake after the LEDs turn off, a silently
+   dropped first mode write, and monitor-thread shutdown. The new readiness and
+   monitor paths currently have no focused test coverage.
+
+A future retest should fetch the updated PR head and inspect only its new diff
+before rebuilding. A full re-analysis is unnecessary unless the structure of
+the readiness, shutdown, or wake-restoration code changes substantially.
+
 ### Rollback result
 
 The three `pkgrel=9` baseline packages were restored immediately. DKMS was
