@@ -32,6 +32,11 @@ from openrazer_daemon.misc.screensaver_monitor import ScreensaverMonitor
 from openrazer_daemon.misc.autosave_persistence import PersistenceAutoSave
 
 
+DEVICE_RETRY_FAST_INTERVAL = 2
+DEVICE_RETRY_FAST_LIMIT = 15
+DEVICE_RETRY_SLOW_INTERVAL = 30
+
+
 class RazerDaemon(DBusService):
     """
     Daemon class
@@ -534,17 +539,21 @@ class RazerDaemon(DBusService):
             if self._stopping:
                 return
 
-            if retry_count >= 15:
-                self.logger.error("Could not add device %s after 15 retries: %s", sys_name, err)
-                return
-
             if sys_name in self._pending_device_retries:
                 return
 
-            self.logger.warning("Device %s is not ready: %s. Retrying in 2 seconds (%d/15)",
-                                sys_name, err, retry_count + 1)
+            if retry_count < DEVICE_RETRY_FAST_LIMIT:
+                retry_interval = DEVICE_RETRY_FAST_INTERVAL
+                self.logger.warning("Device %s is not ready: %s. Retrying in %d seconds (%d/%d)",
+                                    sys_name, err, retry_interval, retry_count + 1, DEVICE_RETRY_FAST_LIMIT)
+            else:
+                retry_interval = DEVICE_RETRY_SLOW_INTERVAL
+                log_method = self.logger.warning if retry_count == DEVICE_RETRY_FAST_LIMIT else self.logger.debug
+                log_method("Device %s is still not ready: %s. Retrying in %d seconds",
+                           sys_name, err, retry_interval)
+
             retry_token = object()
-            retry = threading.Timer(2, self._retry_add_device,
+            retry = threading.Timer(retry_interval, self._retry_add_device,
                                     args=(device, retry_count + 1, additional_interfaces, retry_token))
             retry.daemon = True
             self._pending_device_retries[sys_name] = (retry_token, retry)
@@ -586,7 +595,6 @@ class RazerDaemon(DBusService):
                 continue
 
             if device_class.match(sys_name, sys_path):  # Check it matches sys/ ID format and has device_type file
-                self.logger.info('Found valid device.%d: %s', device_number, sys_name)
                 # Its a udev event so currently the device hasn't been chmodded yet
                 time.sleep(0.2)
 
@@ -598,6 +606,8 @@ class RazerDaemon(DBusService):
                 except DeviceNotReadyError as err:
                     self._schedule_device_retry(device, retry_count, additional_interfaces, err)
                     return
+
+                self.logger.info('Found valid device.%d: %s', device_number, sys_name)
 
                 # Wireless devices sometimes don't listen
                 device_serial = razer_device.get_serial()
