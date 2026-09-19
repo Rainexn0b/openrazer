@@ -278,6 +278,75 @@ The complete test result was posted at:
 
 - [OpenRazer PR 2904 test comment](https://github.com/openrazer/openrazer/pull/2904#issuecomment-5645847015)
 
+## OpenRazer PR 2904 updated retest, 2026-09-19
+
+### Exact version tested
+
+- Updated PR head: `7a6d39784cfc22c07205a8e43f5f64cf03399710`
+- Previous tested PR head: `bfa5299ab66d1a5bdc32c09c5e0f9a1f9ed5d370`
+- Temporary package version: `3.12.4.nagav3.edualb-2`
+- Loaded test module source version: `72836A8715E98CA5722A2C3`
+
+The update adds a daemon `MouseMonitor`, a read-only kernel
+`device_last_activity` attribute, and an initialization wait that uses a valid
+serial response to decide when the wireless mouse is ready. The monitor polls
+the activity attribute every 200 ms, refreshes the hardware idle timeout every
+30 seconds, and writes driver mode once after detecting an idle-to-active
+transition.
+
+Both driver builds passed: Clang/LLVM was used for `7.2.4-1-cachyos` and GCC
+for `6.18.50-1-cachyos-lts`. Python byte compilation and focused mypy checks
+passed. The daemon suite passed 42 tests and retained the unrelated legacy
+`effect_sync` failure. No tests cover the new monitor or readiness behavior.
+
+### Passing behavior
+
+| Test | Result | Evidence |
+| --- | --- | --- |
+| DKMS install | Pass | The exact PR module installed for both current kernels. |
+| Awake discovery | Pass | The dock and Naga appeared with their real serials. |
+| Scroll capability | Pass | D-Bus, Python, and Polychromatic returned exactly tactile, free-spin, and precision tactile. |
+| Scroll mode writes | Pass | Modes `0`, `1`, and `2` round-tripped; Precision Tactile worked physically. |
+| Awake Hypershift | Pass | A control click and `KEY_F17` press/release pair were captured on separate evdev interfaces. |
+| Runtime idle/wake | Pass for one cycle | After a confirmed 60-second sleep, movement caused the monitor to log restoration, mode read back `03 00`, and three Hypershift presses produced clean `KEY_F17` pairs. |
+| Wake during startup | Pass | After movement, the blocked daemon obtained serial `PM2625H38605110`, set mode `03 00`, and completed initialization. |
+
+The runtime test also exposed delayed idle recognition. The hardware was visibly
+asleep after 70 seconds, but `device_last_activity` reported activity only
+17.8 seconds old and the monitor had not marked the mouse idle. The apparent
+sleep-transition report reset the driver's timestamp. The monitor declared the
+mouse idle only after the timestamp later reached 139 seconds. Restoration
+worked after that delayed transition.
+
+### Restart-while-asleep failure
+
+Restarting the daemon with the Naga confirmed asleep still failed clean
+shutdown. The daemon attempted a driver-mode write, raised
+`TimeoutError: [Errno 110] Connection timed out`, exceeded systemd's 10-second
+stop timeout, and was killed with `SIGKILL`.
+
+The replacement process then found the dock and Naga but blocked inside the
+Naga constructor. It logged the idle state at `15:26:50` and did not initialize
+the Naga or log `Serving DBus` until movement at `15:27:33`. Startup therefore
+withheld the whole service, including the available dock, for 43 seconds. If
+the mouse remains off or unavailable, `wait_until_ready()` has no overall idle
+deadline and can block startup indefinitely.
+
+This is worse than the local baseline's bounded asynchronous discovery retry.
+The baseline serves available devices immediately, retries the unavailable
+Naga separately, and stops retrying after a bounded window. The updated PR was
+therefore not adopted despite its successful runtime idle/wake cycle.
+
+### Rollback result
+
+The three `pkgrel=9` baseline packages were restored immediately. DKMS was
+verified installed for both kernels; the current kernel's loaded and on-disk
+module fingerprints both returned `665C13D879FF3501D395708`. Final state was
+daemon active, real dock and Naga serials, device mode `03 00`, idle timeout
+`300`, scroll mode `0`, all three scroll options, and the expected Polychromatic
+backend hash
+`45c9fcc5122717d8787c82473cd6224bb45207f0e714e6e525e3f44a273eab24`.
+
 ## Polychromatic PR 613
 
 ### Exact versions tested
