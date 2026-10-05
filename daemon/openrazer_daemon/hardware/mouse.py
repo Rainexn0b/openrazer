@@ -5,6 +5,7 @@ Mouse class
 """
 import errno
 import re
+import threading
 from openrazer_daemon.hardware.device_base import (
     DeviceNotReadyError as _DeviceNotReadyError,
     RazerDevice as __RazerDevice,
@@ -1073,6 +1074,8 @@ class RazerNagaV3ProWireless(RazerNagaV3ProWired):
 
     def __init__(self, *args, **kwargs):
         self._is_closed = True
+        self._device_mode_lock = threading.RLock()
+        self._mouse_monitor = None
         if not mouse_monitor.is_device_serial_ready(kwargs.get('device_path')):
             raise _DeviceNotReadyError(errno.EAGAIN, 'Device serial is not ready')
 
@@ -1081,11 +1084,31 @@ class RazerNagaV3ProWireless(RazerNagaV3ProWired):
         self._mouse_monitor = mouse_monitor.MouseMonitor(kwargs.get('device_number'), self)
         self._mouse_monitor.start()
 
-    def _close(self):
-        self._mouse_monitor.shutdown = True
-        self._mouse_monitor.join()
+    def set_device_mode(self, mode_id, param):
+        with self._device_mode_lock:
+            # Remember intent even if an unavailable receiver rejects the write.
+            # In particular, recovery must not undo a firmware-mode request.
+            driver_mode = mode_id == 0x03
+            if driver_mode != self.DRIVER_MODE:
+                self.logger.info('Requested %s mode', 'driver' if driver_mode else 'device')
+            self.DRIVER_MODE = driver_mode
+            super().set_device_mode(mode_id, param)
 
-        super()._close()
+    def resume_device(self):
+        with self._device_mode_lock:
+            try:
+                super().resume_device()
+            finally:
+                self.disable_notify = False
+                self.disable_persistence = False
+
+    def close(self):
+        if not self._is_closed and self._mouse_monitor is not None:
+            self._mouse_monitor.shutdown = True
+            if self._mouse_monitor.ident is not None:
+                self._mouse_monitor.join()
+
+        super().close()
 
 
 class RazerDeathAdder1800(__RazerDevice):
