@@ -8,6 +8,7 @@
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/jiffies.h>
+#include <linux/spinlock.h>
 #include <linux/usb/input.h>
 #include <linux/hid.h>
 #include <linux/hrtimer.h>
@@ -27,6 +28,18 @@ MODULE_AUTHOR(DRIVER_AUTHOR);
 MODULE_DESCRIPTION(DRIVER_DESC);
 MODULE_VERSION(DRIVER_VERSION);
 MODULE_LICENSE(DRIVER_LICENSE);
+
+/* Serializes activity access with private-data publication and retirement. */
+static DEFINE_SPINLOCK(razer_mouse_activity_lock);
+
+static void razer_mouse_set_drvdata(struct hid_device *hdev, struct razer_mouse_device *dev)
+{
+    unsigned long flags;
+
+    spin_lock_irqsave(&razer_mouse_activity_lock, flags);
+    hid_set_drvdata(hdev, dev);
+    spin_unlock_irqrestore(&razer_mouse_activity_lock, flags);
+}
 
 /**
  * Send report to the mouse
@@ -3522,15 +3535,27 @@ static ssize_t razer_attr_read_dpi_stages(struct device *dev, struct device_attr
  */
 static ssize_t razer_attr_read_device_last_activity(struct device *dev, struct device_attribute *attr, char *buf)
 {
-    struct razer_mouse_device *device = dev_get_drvdata(dev);
-    unsigned long last_activity;
+    struct razer_mouse_device *device;
+    unsigned long last_activity = 0;
+    unsigned long flags;
+    bool valid;
+
+    spin_lock_irqsave(&razer_mouse_activity_lock, flags);
+    device = dev_get_drvdata(dev);
+    if (!device) {
+        spin_unlock_irqrestore(&razer_mouse_activity_lock, flags);
+        return -EAGAIN;
+    }
 
     /* Pairs with the smp_store_release() in razer_note_activity(): if the flag
      * is set, the timestamp stored before it is visible here as well. */
-    if (!smp_load_acquire(&device->last_activity_valid))
-        return sysfs_emit(buf, "-1\n");
+    valid = smp_load_acquire(&device->last_activity_valid);
+    if (valid)
+        last_activity = READ_ONCE(device->last_activity);
+    spin_unlock_irqrestore(&razer_mouse_activity_lock, flags);
 
-    last_activity = READ_ONCE(device->last_activity);
+    if (!valid)
+        return sysfs_emit(buf, "-1\n");
 
     return sysfs_emit(buf, "%u\n", jiffies_to_msecs(jiffies - last_activity));
 }
@@ -6423,21 +6448,27 @@ static struct usb_interface *find_intf_with_proto(struct usb_device *usbdev, u8 
 /**
  * Walk up the device tree from an interface to the device it is a
  * part of, then back down through the interface with protocol == MOUSE
- * to the razer_mouse_device associated with it
+ * to its HID device. The caller owns the returned device reference.
  */
-static struct razer_mouse_device *find_mouse(struct hid_device *hdev)
+static struct device *find_mouse_device(struct hid_device *hdev)
 {
     const struct bus_type *mouse_hid_bus_type = hdev->dev.bus;
     struct usb_interface *intf = to_usb_interface(hdev->dev.parent);
     struct usb_device *usbdev = interface_to_usbdev(intf);
     struct usb_interface *m_intf = find_intf_with_proto(usbdev, USB_INTERFACE_PROTOCOL_MOUSE);
-    struct device *dev;
-    struct razer_mouse_device *rdev;
 
     if (!m_intf)
         return NULL;
 
-    dev = device_find_child(&m_intf->dev, (void *)mouse_hid_bus_type, dev_is_on_bus);
+    return device_find_child(&m_intf->dev, (void *)mouse_hid_bus_type, dev_is_on_bus);
+}
+
+/* Legacy Report 4 lookup; unlike activity access, this does not guard retirement. */
+static struct razer_mouse_device *find_mouse(struct hid_device *hdev)
+{
+    struct device *dev = find_mouse_device(hdev);
+    struct razer_mouse_device *rdev;
+
     if (!dev)
         return NULL;
 
@@ -6471,19 +6502,31 @@ static bool razer_report_has_input(struct hid_report *report, unsigned char prot
  * The device files live on the mouse interface, so reports seen on the
  * keyboard interfaces are recorded on the mouse device as well.
  */
-static void razer_note_activity(struct hid_device *hdev, struct razer_mouse_device *rdev, struct hid_report *report, unsigned char protocol, u8 *data, int size)
+static void razer_note_activity(struct hid_device *hdev, struct hid_report *report, unsigned char protocol, u8 *data, int size)
 {
+    struct device *dev = &hdev->dev;
+    struct razer_mouse_device *rdev;
+    unsigned long flags;
+
     if (!razer_report_has_input(report, protocol, data, size))
         return;
 
     if (protocol != USB_INTERFACE_PROTOCOL_MOUSE) {
-        rdev = find_mouse(hdev);
-        if (!rdev)
+        dev = find_mouse_device(hdev);
+        if (!dev)
             return;
     }
 
-    WRITE_ONCE(rdev->last_activity, jiffies);
-    smp_store_release(&rdev->last_activity_valid, true);
+    spin_lock_irqsave(&razer_mouse_activity_lock, flags);
+    rdev = dev_get_drvdata(dev);
+    if (rdev) {
+        WRITE_ONCE(rdev->last_activity, jiffies);
+        smp_store_release(&rdev->last_activity_valid, true);
+    }
+    spin_unlock_irqrestore(&razer_mouse_activity_lock, flags);
+
+    if (protocol != USB_INTERFACE_PROTOCOL_MOUSE)
+        put_device(dev);
 }
 
 /**
@@ -6593,7 +6636,7 @@ static int razer_raw_event(struct hid_device *hdev, struct hid_report *report, u
         break;
     case USB_DEVICE_ID_RAZER_NAGA_V3_PRO_WIRED:
     case USB_DEVICE_ID_RAZER_NAGA_V3_PRO_WIRELESS:
-        razer_note_activity(hdev, rdev, report, intf->cur_altsetting->desc.bInterfaceProtocol, data, size);
+        razer_note_activity(hdev, report, intf->cur_altsetting->desc.bInterfaceProtocol, data, size);
 
         /* Detect wheel tilt edges
          * tilting produces data[0] 0x00->0x20->0x00 (left) or
@@ -7998,8 +8041,7 @@ static int razer_mouse_probe(struct hid_device *hdev, const struct hid_device_id
 
     }
 
-    hid_set_drvdata(hdev, dev);
-    dev_set_drvdata(&hdev->dev, dev);
+    razer_mouse_set_drvdata(hdev, dev);
 
     retval = hid_parse(hdev);
     if(retval)    {
@@ -8018,6 +8060,11 @@ static int razer_mouse_probe(struct hid_device *hdev, const struct hid_device_id
     return 0;
 
 exit_free:
+    if (dev->usb_interface_protocol == USB_INTERFACE_PROTOCOL_MOUSE &&
+        (dev->usb_pid == USB_DEVICE_ID_RAZER_NAGA_V3_PRO_WIRED ||
+         dev->usb_pid == USB_DEVICE_ID_RAZER_NAGA_V3_PRO_WIRELESS))
+        device_remove_file(&hdev->dev, &dev_attr_device_last_activity);
+    razer_mouse_set_drvdata(hdev, NULL);
     kfree(dev);
     return retval;
 }
@@ -9192,6 +9239,7 @@ static void razer_mouse_disconnect(struct hid_device *hdev)
     hid_hw_stop(hdev);
     hrtimer_cancel(&dev->repeat_timer);
 
+    razer_mouse_set_drvdata(hdev, NULL);
     kfree(dev);
     hid_info(hdev, "Razer Device disconnected\n");
 }

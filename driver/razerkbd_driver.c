@@ -5448,6 +5448,17 @@ static void razer_kbd_init(struct razer_kbd_device *dev, struct hid_device *hdev
     dev->usb_interface_protocol = intf->cur_altsetting->desc.bInterfaceProtocol;
 }
 
+static void razer_kbd_remove_device_files(struct hid_device *hdev);
+
+/* Keep probe errors local to this driver rather than using the shared macro. */
+#undef CREATE_DEVICE_FILE
+#define CREATE_DEVICE_FILE(device, attr) \
+do { \
+    err = device_create_file(device, attr); \
+    if (err) \
+        goto exit_remove; \
+} while (0)
+
 /**
  * Probe method is ran whenever a device is binded to the driver
  */
@@ -5479,6 +5490,7 @@ static int razer_kbd_probe(struct hid_device *hdev, const struct hid_device_id *
 
     // Init data
     razer_kbd_init(dev, hdev);
+    hid_set_drvdata(hdev, dev);
 
     // Other interfaces are actual key-emitting devices
     if(intf->cur_altsetting->desc.bInterfaceProtocol == USB_INTERFACE_PROTOCOL_MOUSE) {
@@ -5984,7 +5996,7 @@ static int razer_kbd_probe(struct hid_device *hdev, const struct hid_device_id *
         if (usb_dev->descriptor.idProduct != USB_DEVICE_ID_RAZER_TARTARUS_PRO) {
             err = razer_set_device_mode(dev, 0x00, 0x00);
             if (err)
-                goto exit_free;
+                goto exit_remove;
         }
     } else if(intf->cur_altsetting->desc.bInterfaceProtocol == USB_INTERFACE_PROTOCOL_KEYBOARD) {
         CREATE_DEVICE_FILE(&hdev->dev, &dev_attr_key_super);
@@ -5992,19 +6004,16 @@ static int razer_kbd_probe(struct hid_device *hdev, const struct hid_device_id *
         CREATE_DEVICE_FILE(&hdev->dev, &dev_attr_key_alt_f4);
     }
 
-    hid_set_drvdata(hdev, dev);
-    dev_set_drvdata(&hdev->dev, dev);
-
     err = hid_parse(hdev);
     if (err) {
         hid_err(hdev, "parse failed: %d\n", err);
-        goto exit_free;
+        goto exit_remove;
     }
 
     err = hid_hw_start(hdev, HID_CONNECT_DEFAULT);
     if (err) {
         hid_err(hdev, "hw start failed: %d\n", err);
-        goto exit_free;
+        goto exit_remove;
     }
 
     // Leave autosuspend on for laptops
@@ -6016,21 +6025,22 @@ static int razer_kbd_probe(struct hid_device *hdev, const struct hid_device_id *
     //msleep(3000);
     return 0;
 
+exit_remove:
+    /* Removal drains active sysfs callbacks before their private data is freed. */
+    razer_kbd_remove_device_files(hdev);
+    hid_set_drvdata(hdev, NULL);
 exit_free:
     kfree(dev);
     return err;
 }
 
-/**
- * Unbind function
- */
-static void razer_kbd_disconnect(struct hid_device *hdev)
+#undef CREATE_DEVICE_FILE
+
+/* device_remove_file() tolerates missing attributes after a partial probe. */
+static void razer_kbd_remove_device_files(struct hid_device *hdev)
 {
-    struct razer_kbd_device *dev;
     struct usb_interface *intf = to_usb_interface(hdev->dev.parent);
     struct usb_device *usb_dev = interface_to_usbdev(intf);
-
-    dev = hid_get_drvdata(hdev);
 
     // Other interfaces are actual key-emitting devices
     if(intf->cur_altsetting->desc.bInterfaceProtocol == USB_INTERFACE_PROTOCOL_MOUSE) {
@@ -6534,8 +6544,18 @@ static void razer_kbd_disconnect(struct hid_device *hdev)
         device_remove_file(&hdev->dev, &dev_attr_key_alt_tab);
         device_remove_file(&hdev->dev, &dev_attr_key_alt_f4);
     }
+}
 
+/**
+ * Unbind function
+ */
+static void razer_kbd_disconnect(struct hid_device *hdev)
+{
+    struct razer_kbd_device *dev = hid_get_drvdata(hdev);
+
+    razer_kbd_remove_device_files(hdev);
     hid_hw_stop(hdev);
+    hid_set_drvdata(hdev, NULL);
     kfree(dev);
     hid_info(hdev, "Razer Device disconnected\n");
 }

@@ -35,7 +35,7 @@ def get_scroll_mode(self):
     """
     Get the device's current scroll mode
 
-    :return: The device's current scroll mode (0 = tactile, 1 = free spin)
+    :return: The device's current scroll mode (0 = tactile, 1 = free spin, 2 = precision tactile)
     :rtype: int
     """
     self.logger.debug("DBus call get_scroll_mode")

@@ -1,0 +1,73 @@
+# Build every component from one immutable canonical commit, never file overlays.
+pkgbase=openrazer-local
+pkgname=('openrazer-driver-dkms-local' 'openrazer-daemon-local' 'python-openrazer-local')
+pkgver=3.12.1.pr2904.fix2
+pkgrel=1
+pkgdesc='OpenRazer canonical PR 2904 derivative with Naga recovery and lifetime fixes'
+arch=('any')
+url='https://github.com/Rainexn0b/openrazer'
+license=('GPL-2.0-or-later')
+makedepends=('git' 'python-setuptools')
+
+_commit=${OPENRAZER_COMMIT:-}
+if [[ ! $_commit =~ ^[0-9a-f]{40}$ ]]; then
+    printf 'Set OPENRAZER_COMMIT to the full committed canonical source SHA.\n' >&2
+    return 1
+fi
+source=("openrazer::git+https://github.com/Rainexn0b/openrazer.git#commit=$_commit")
+sha256sums=('SKIP')
+
+prepare() {
+    cd "$srcdir/openrazer"
+    test "$(git rev-parse HEAD)" = "$_commit"
+    sed -i 's/plugdev/openrazer/g' daemon/openrazer_daemon/daemon.py \
+        install_files/udev/99-razer.rules install_files/udev/razer_mount
+}
+
+check() {
+    cd "$srcdir/openrazer"
+    PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$PWD/daemon:$PWD/pylib" python -m unittest \
+        daemon.tests.test_daemon_hotplug daemon.tests.test_mouse_monitor \
+        daemon.tests.test_keyboard_probe daemon.tests.test_mouse_activity \
+        daemon.tests.test_mouse_scroll_wheel pylib.tests.test_mouse_scroll_mode
+}
+
+_record_source() {
+    install -d "$pkgdir/usr/share/doc/$pkgname"
+    printf '%s\n' "$_commit" > "$pkgdir/usr/share/doc/$pkgname/source-commit"
+}
+
+package_openrazer-driver-dkms-local() {
+    depends=('dkms')
+    provides=("openrazer-driver-dkms=$pkgver")
+    conflicts=('openrazer-driver-dkms')
+
+    cd "$srcdir/openrazer"
+    make DESTDIR="$pkgdir" PREFIX=/usr DKMS_VER="$pkgver" setup_dkms udev_install appstream_install
+    local dkmsdir="$pkgdir/usr/src/openrazer-driver-$pkgver"
+    sed -i "s/^PACKAGE_VERSION=.*/PACKAGE_VERSION=\"$pkgver\"/" "$dkmsdir/dkms.conf"
+    sed -i 's|^MAKE=.*|MAKE="./dkms-make ${kernelver}"|' "$dkmsdir/dkms.conf"
+    install -m755 packaging/arch-canonical/dkms-make "$dkmsdir/dkms-make"
+    install -Dm644 packaging/arch-canonical/openrazer.conf "$pkgdir/usr/lib/sysusers.d/openrazer.conf"
+    _record_source
+}
+
+package_openrazer-daemon-local() {
+    depends=('python' 'dbus-python' "openrazer-driver-dkms-local=$pkgver-$pkgrel"
+             'python-daemonize' 'python-gobject' 'python-pyudev' 'python-setproctitle' 'xautomation')
+    optdepends=('libnotify: battery notifications')
+    provides=("openrazer-daemon=$pkgver")
+    conflicts=('openrazer-daemon')
+
+    make -C "$srcdir/openrazer/daemon" DESTDIR="$pkgdir" PREFIX=/usr install
+    _record_source
+}
+
+package_python-openrazer-local() {
+    depends=("openrazer-daemon-local=$pkgver-$pkgrel" 'python-numpy')
+    provides=("python-openrazer=$pkgver")
+    conflicts=('python-openrazer')
+
+    make -C "$srcdir/openrazer/pylib" DESTDIR="$pkgdir" PREFIX=/usr install
+    _record_source
+}
