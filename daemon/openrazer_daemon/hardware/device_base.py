@@ -53,7 +53,7 @@ class RazerDevice(DBusService):
 
     DEVICE_IMAGE: Optional[str] = None
 
-    def __init__(self, device_path, device_number, config, persistence, testing, additional_interfaces, additional_methods, unknown_serial_counter):
+    def __init__(self, device_path, device_number, config, persistence, testing, additional_interfaces, additional_methods, unknown_serial_counter, serial_guard=None):
 
         self.logger = logging.getLogger('razer.device{0}'.format(device_number))
         self.logger.info("Initialising device.%d %s", device_number, self.__class__.__name__)
@@ -84,6 +84,9 @@ class RazerDevice(DBusService):
         self._device_path = device_path
         self._device_number = device_number
         self.serial = self.get_serial()
+
+        if serial_guard is not None:
+            serial_guard(self.serial)
 
         if self.USB_PID == 0x0f07:
             self.storage_name = "ChromaMug"

@@ -22,7 +22,9 @@ package archives and hashes, and `.BUILDINFO` for deployment provenance.
 The DKMS wrapper selects LLVM for Clang-built kernels and the default compiler
 otherwise. Matching kernel headers, DKMS, the relevant compilers, base-devel,
 Git, python-setuptools, and the daemon test dependencies must be installed.
-All 55 focused regression tests run during the package build.
+All 80 focused regression tests run during the package build. See
+[UPGRADE-fix3](UPGRADE-fix3.md) for the fix3 upgrade, rollback, activation,
+and verification steps.
 
 Install all three packages together using their exact filenames through a
 visible privileged terminal. Do not use the older mutable-overlay recovery

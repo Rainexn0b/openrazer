@@ -28,6 +28,7 @@ import openrazer_daemon.hardware
 from openrazer_daemon.hardware.device_base import DeviceNotReadyError
 from openrazer_daemon.dbus_services.service import DBusService
 from openrazer_daemon.device import DeviceCollection
+from openrazer_daemon.misc import serial_identity
 from openrazer_daemon.misc.screensaver_monitor import ScreensaverMonitor
 from openrazer_daemon.misc.autosave_persistence import PersistenceAutoSave
 
@@ -504,11 +505,13 @@ class RazerDaemon(DBusService):
                         break
 
                     try:
+                        guard_kwargs = serial_identity.serial_guard_kwargs(device_class, self._razer_devices)
                         razer_device = device_class(device_path=sys_path, device_number=device_number, config=self._config,
                                                     persistence=self._persistence, testing=self._test_dir is not None,
                                                     additional_interfaces=sorted(additional_interfaces),
                                                     additional_methods=[],
-                                                    unknown_serial_counter=self._unknown_serial_counter)
+                                                    unknown_serial_counter=self._unknown_serial_counter,
+                                                    **guard_kwargs)
                     except DeviceNotReadyError as err:
                         if test_mode:
                             raise
@@ -599,10 +602,12 @@ class RazerDaemon(DBusService):
                 time.sleep(0.2)
 
                 try:
+                    guard_kwargs = serial_identity.serial_guard_kwargs(device_class, self._razer_devices)
                     razer_device = device_class(device_path=sys_path, device_number=device_number, config=self._config,
                                                 persistence=self._persistence, testing=self._test_dir is not None,
                                                 additional_interfaces=additional_interfaces, additional_methods=[],
-                                                unknown_serial_counter=self._unknown_serial_counter)
+                                                unknown_serial_counter=self._unknown_serial_counter,
+                                                **guard_kwargs)
                 except DeviceNotReadyError as err:
                     self._schedule_device_retry(device, retry_count, additional_interfaces, err)
                     return

@@ -4,6 +4,8 @@
 Class to hold a device and collections of them
 """
 
+from openrazer_daemon.misc import serial_identity
+
 
 class Device(object):
     """
@@ -101,7 +103,14 @@ class DeviceCollection(object):
 
         :param device_dbus: Device's DBus object
         :type device_dbus: openrazer_daemon.hardware.device_base.__RazerDevice
+
+        :raises DuplicateDeviceError: If ID or serial is already owned
         """
+        if device_id in self._id_map:
+            raise serial_identity.DuplicateDeviceError("duplicate device ID")
+        if device_serial in self._serial_map:
+            raise serial_identity.DuplicateDeviceError("duplicate device serial")
+
         device_object = Device(device_id, device_serial, device_dbus)
         device_object.register_parent(self)
 
@@ -194,13 +203,18 @@ class DeviceCollection(object):
         :type key: str
         """
         if key in self._id_map:
-            serial = self._id_map[key].serial
+            device_object = self._id_map[key]
+            serial = device_object.serial
             self._id_map.pop(key, None)
-            self._serial_map.pop(serial, None)
+            if self._serial_map.get(serial) is device_object:
+                self._serial_map.pop(serial, None)
         elif key in self._serial_map:
-            device_id = self._serial_map[key].device_id
-            self._id_map.pop(device_id, None)
+            device_object = self._serial_map[key]
+            serial = key
+            device_id = device_object.device_id
             self._serial_map.pop(key, None)
+            if self._id_map.get(device_id) is device_object:
+                self._id_map.pop(device_id, None)
 
     def __contains__(self, item):
         """
